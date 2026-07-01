@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { useCartStore } from '../../store/cart.store'
 import { useAuthStore } from '../../store/auth.store'
 import { formatPaise } from '../../../main/utils/paise'
+import { generateReceiptHtml } from '../print/ReceiptTemplate'
 import { CheckCircle2, Loader2, X, AlertTriangle } from 'lucide-react'
 
 interface CheckoutModalProps {
@@ -61,9 +62,32 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
         }))
       }
 
-      await window.api.invoke(IPC_CHANNELS.SALES_CREATE, payload)
+      // Record the sale
+      const saleId = await window.api.invoke(IPC_CHANNELS.SALES_CREATE, payload)
+      
       setSuccess(true)
       
+      // Auto-Print the receipt
+      try {
+        // Construct sale object for the template
+        const receiptSale = {
+          billNumber: `BILL-${saleId}`, // Simplified, usually fetched from DB
+          patientName: payload.patientName,
+          patientPhone: payload.patientPhone,
+          doctorName: payload.doctorName,
+          doctorRegNo: payload.doctorRegNo,
+          subtotalPaise: payload.subtotalPaise,
+          totalDiscountPaise: payload.totalDiscountPaise,
+          grandTotalPaise: payload.grandTotalPaise
+        }
+        
+        const html = generateReceiptHtml(receiptSale, items)
+        await window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, html)
+      } catch (printErr) {
+        console.error("Failed to print receipt", printErr)
+        // We don't fail the checkout if printing fails, but maybe show a toast in a real app
+      }
+
       // Auto close and clear after 2 seconds
       setTimeout(() => {
         clearCart()
