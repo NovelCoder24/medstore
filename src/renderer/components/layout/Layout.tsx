@@ -1,10 +1,11 @@
 import React from 'react'
 import { useAuthStore } from '../../store/auth.store'
-import { LogOut, LayoutDashboard, ShoppingCart, PackageSearch, Users, Settings } from 'lucide-react'
+import { LogOut, LayoutDashboard, ShoppingCart, PackageSearch, Users, Settings, ShoppingBag, FileDown } from 'lucide-react'
 
 const navItems = [
   { icon: ShoppingCart, label: 'POS Billing', role: 'CASHIER' },
   { icon: PackageSearch, label: 'Inventory', role: 'CASHIER' },
+  { icon: FileDown, label: 'Purchases', role: 'OWNER' },
   { icon: LayoutDashboard, label: 'Dashboard', role: 'OWNER' },
   { icon: Users, label: 'Staff', role: 'OWNER' },
   { icon: Settings, label: 'Settings', role: 'OWNER' },

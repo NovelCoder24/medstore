@@ -7,6 +7,7 @@ import { Layout } from './components/layout/Layout'
 import { ProductList } from './components/catalog/ProductList'
 import { VendorList } from './components/catalog/VendorList'
 import { PosBilling } from './components/pos/PosBilling'
+import { PurchaseForm } from './components/purchases/PurchaseForm'
 import { Loader2 } from 'lucide-react'
 
 export function App() {
@@ -48,6 +49,7 @@ export function App() {
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'POS Billing' && <PosBilling />}
       {activeTab === 'Inventory' && <ProductList />}
+      {activeTab === 'Purchases' && <PurchaseForm />}
       {activeTab === 'Suppliers' && <VendorList />}
       {activeTab === 'Dashboard' && (
         <div className="rounded-xl border bg-card p-8 shadow-sm">
