@@ -6,6 +6,7 @@ import { PinPad } from './components/auth/PinPad'
 import { Layout } from './components/layout/Layout'
 import { ProductList } from './components/catalog/ProductList'
 import { VendorList } from './components/catalog/VendorList'
+import { PosBilling } from './components/pos/PosBilling'
 import { Loader2 } from 'lucide-react'
 
 export function App() {
@@ -37,7 +38,7 @@ export function App() {
     return <FirstRunSetup onComplete={checkFirstRun} />
   }
 
-  const [activeTab, setActiveTab] = useState('Inventory')
+  const [activeTab, setActiveTab] = useState('POS Billing')
 
   if (!user) {
     return <PinPad />
@@ -45,6 +46,7 @@ export function App() {
 
   return (
     <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === 'POS Billing' && <PosBilling />}
       {activeTab === 'Inventory' && <ProductList />}
       {activeTab === 'Suppliers' && <VendorList />}
       {activeTab === 'Dashboard' && (
@@ -60,4 +62,5 @@ export function App() {
     </Layout>
   )
 }
+
 
