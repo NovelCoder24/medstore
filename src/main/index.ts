@@ -2,6 +2,11 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './services/db.service'
+import { registerUserHandlers } from './services/user.service'
+import { registerVendorHandlers } from './services/vendor.service'
+import { registerCompositionHandlers } from './services/composition.service'
+import { registerProductHandlers } from './services/product.service'
+import { registerImportHandlers } from './services/import.service'
 
 function createWindow(): void {
   // Create the browser window.
@@ -51,6 +56,11 @@ app.whenReady().then(() => {
   // Initialize Database
   try {
     initDatabase()
+    registerUserHandlers()
+    registerVendorHandlers()
+    registerCompositionHandlers()
+    registerProductHandlers()
+    registerImportHandlers()
   } catch (error) {
     console.error('Failed to initialize database:', error)
     app.quit()
