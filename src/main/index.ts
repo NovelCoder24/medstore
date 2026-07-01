@@ -11,6 +11,7 @@ import { registerSalesHandlers } from './services/sales.service'
 import { registerPurchaseHandlers } from './services/purchase.service'
 import { registerPrintHandlers } from './services/print.service'
 import { registerOcrHandlers } from './services/ocr.service'
+import { registerAnalyticsHandlers } from './services/analytics.service'
 
 function createWindow(): void {
   // Create the browser window.
@@ -69,6 +70,7 @@ app.whenReady().then(() => {
     registerPurchaseHandlers()
     registerPrintHandlers()
     registerOcrHandlers()
+    registerAnalyticsHandlers()
   } catch (error) {
     console.error('Failed to initialize database:', error)
     app.quit()

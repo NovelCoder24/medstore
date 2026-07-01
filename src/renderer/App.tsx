@@ -8,6 +8,7 @@ import { ProductList } from './components/catalog/ProductList'
 import { VendorList } from './components/catalog/VendorList'
 import { PosBilling } from './components/pos/PosBilling'
 import { PurchaseForm } from './components/purchases/PurchaseForm'
+import { Dashboard } from './components/dashboard/Dashboard'
 import { Loader2 } from 'lucide-react'
 
 export function App() {
@@ -51,16 +52,7 @@ export function App() {
       {activeTab === 'Inventory' && <ProductList />}
       {activeTab === 'Purchases' && <PurchaseForm />}
       {activeTab === 'Suppliers' && <VendorList />}
-      {activeTab === 'Dashboard' && (
-        <div className="rounded-xl border bg-card p-8 shadow-sm">
-          <h1 className="text-3xl font-bold tracking-tight text-primary">
-            Welcome back, {user.display_name}
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            You are logged in as {user.role}. Start billing or manage inventory from the sidebar.
-          </p>
-        </div>
-      )}
+      {activeTab === 'Dashboard' && <Dashboard />}
     </Layout>
   )
 }
