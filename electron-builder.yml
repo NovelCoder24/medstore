@@ -1,0 +1,24 @@
+appId: com.medstore.pos
+productName: MedStore POS
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: MedStorePOS
+nsis:
+  artifactName: MedStorePOS-Setup-${version}.${ext}
+  shortcutName: MedStore POS
+  uninstallDisplayName: MedStore POS ${version}
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+npmRebuild: true
