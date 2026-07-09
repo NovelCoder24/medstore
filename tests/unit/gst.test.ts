@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateItemGst, aggregateGst } from '../../src/main/utils/gst'
+import { calculateItemGst, aggregateGst } from '../../src/shared/utils/gst'
 
 describe('GST utility', () => {
   it('calculateItemGst computes tax correctly (intra-state)', () => {

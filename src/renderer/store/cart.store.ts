@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { calculateItemGst, aggregateGst, GstBreakdown } from '../../../main/utils/gst'
+import { calculateItemGst, aggregateGst, GstBreakdown } from '../../shared/utils/gst'
+import type { Paise } from '../../shared/utils/paise'
 
 export interface CartLineItem {
   id: string // unique id for UI rendering
@@ -10,9 +11,13 @@ export interface CartLineItem {
   batchNumber: string
   expiryDate: string
   
-  mrpPaise: number
-  salePricePaise: number // base price before discount/tax
-  discountPaise: number // per unit discount
+  availableQuantity: number // max stock available in this batch
+  scheduleFlag: 'H' | 'H1' | 'X' | 'NONE' // New field for compliance
+  
+  mrpPaise: Paise
+  purchaseRatePaise: Paise // cost per unit for margin calculation
+  salePricePaise: Paise // base price before discount/tax
+  discountPaise: Paise // per unit discount
   quantityUnits: number // atomic units
   
   gstRatePct: number
@@ -75,7 +80,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         // Increment quantity
         const updatedItems = [...state.items]
         const currentItem = updatedItems[existingIdx]
-        const newQty = currentItem.quantityUnits + item.quantityUnits
+        const newQty = Math.min(currentItem.quantityUnits + item.quantityUnits, currentItem.availableQuantity)
         
         updatedItems[existingIdx] = {
           ...currentItem,
@@ -109,13 +114,14 @@ export const useCartStore = create<CartState>((set, get) => ({
     set((state) => ({
       items: state.items.map(item => {
         if (item.id === id) {
+          const safeQty = Math.min(Math.max(1, quantityUnits), item.availableQuantity)
           return {
             ...item,
-            quantityUnits,
+            quantityUnits: safeQty,
             gstBreakdown: calculateItemGst(
               item.salePricePaise,
               item.discountPaise,
-              quantityUnits,
+              safeQty,
               item.gstRatePct,
               item.isInterState
             )

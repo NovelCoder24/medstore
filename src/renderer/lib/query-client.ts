@@ -7,7 +7,7 @@ export const queryClient = new QueryClient({
       // 5 minute stale time is perfectly fine, since we invalidate queries on mutation.
       staleTime: 5 * 60 * 1000,
       retry: false, // local IPC shouldn't randomly fail
-      refetchOnWindowFocus: true, // Keep it true in case multiple windows are open later
+      refetchOnWindowFocus: false, // Disabled: this is a single-user local app. Refetching on focus causes a thundering herd of synchronous IPC->SQLite calls that blocks the main thread (especially after laptop lid open/close).
     },
   },
 })

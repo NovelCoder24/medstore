@@ -50,17 +50,21 @@ export function calculateItemGst(
   gstRatePct: number,
   isInterState: boolean
 ): GstBreakdown {
-  // Step 1: Taxable value = (unit price - discount) × quantity
+  // Step 1: In India, MRP is inclusive of GST.
+  // The net selling price (inclusive of tax) is (unit price - discount) * quantity
   const netPerUnit = unitPricePaise - discountPerUnitPaise
   if (netPerUnit < 0) {
     throw new Error(
       `Discount (${discountPerUnitPaise}) exceeds unit price (${unitPricePaise})`
     )
   }
-  const taxableValuePaise = netPerUnit * quantity
+  
+  const lineTotalPaise = netPerUnit * quantity
 
-  // Step 2: Total tax on taxable value
-  const totalTaxPaise = Math.round((taxableValuePaise * gstRatePct) / 100)
+  // Step 2: Reverse calculate Taxable Value and Total Tax
+  // Taxable Value = Line Total * 100 / (100 + GST Rate)
+  const taxableValuePaise = Math.round((lineTotalPaise * 100) / (100 + gstRatePct))
+  const totalTaxPaise = lineTotalPaise - taxableValuePaise
 
   // Step 3: Split based on state
   let cgstPaise: number
@@ -77,8 +81,6 @@ export function calculateItemGst(
     sgstPaise = totalTaxPaise - cgstPaise
     igstPaise = 0
   }
-
-  const lineTotalPaise = taxableValuePaise + totalTaxPaise
 
   return {
     taxableValuePaise: taxableValuePaise as Paise,

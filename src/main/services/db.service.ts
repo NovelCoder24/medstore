@@ -3,7 +3,7 @@
  *
  * KEY CONFIG:
  * - WAL journal mode for concurrent read/write performance
- * - synchronous = NORMAL for safety without full fsync overhead
+ * - synchronous = FULL for power-loss resilience (no confirmed UPS)
  * - foreign_keys = ON enforced on every connection
  * - busy_timeout = 5000ms to handle lock contention with worker threads
  *
@@ -52,7 +52,7 @@ export function initDatabase(): void {
 
   // ── SQLite configuration ──
   db.pragma('journal_mode = WAL')
-  db.pragma('synchronous = NORMAL')
+  db.pragma('synchronous = FULL')
   db.pragma('foreign_keys = ON')
   db.pragma('busy_timeout = 5000')
   db.pragma('cache_size = -64000') // 64MB page cache

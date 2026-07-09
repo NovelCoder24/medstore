@@ -3,6 +3,7 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["./src/shared/*"],
@@ -12,6 +13,7 @@
   "include": [
     "src/renderer/**/*",
     "src/shared/**/*",
+    "src/main/**/*.ts",
     "src/preload/index.d.ts"
   ]
 }

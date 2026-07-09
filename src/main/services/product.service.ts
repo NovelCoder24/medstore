@@ -29,6 +29,11 @@ interface ProductSearchParams {
   categoryId?: ProductCategory
   page?: number
   pageSize?: number
+  hideOutOfStock?: boolean
+  genericOnly?: boolean
+  ethicalOnly?: boolean
+  expiringSoon?: boolean
+  onlyOutOfStock?: boolean
 }
 
 interface PaginatedResult<T> {
@@ -110,6 +115,26 @@ export function searchProducts(params: ProductSearchParams): PaginatedResult<Pro
   if (categoryId) {
     conditions.push(`p.category = ?`)
     values.push(categoryId)
+  }
+
+  if (params.hideOutOfStock) {
+    conditions.push(`COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) > 0`)
+  }
+
+  if (params.genericOnly) {
+    conditions.push(`p.category = 'GENERIC'`)
+  }
+
+  if (params.ethicalOnly) {
+    conditions.push(`p.category = 'ETHICAL'`)
+  }
+
+  if (params.expiringSoon) {
+    conditions.push(`EXISTS (SELECT 1 FROM batches b WHERE b.product_id = p.id AND b.status = 'ACTIVE' AND b.quantity > 0 AND b.expiry_date <= date('now', '+90 days'))`)
+  }
+
+  if (params.onlyOutOfStock) {
+    conditions.push(`COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) = 0`)
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -217,7 +242,17 @@ export function getProduct(id: number): Product | undefined {
   return product
 }
 
-export function createProduct(data: Omit<Product, 'id' | 'created_at' | 'total_stock_units' | 'composition'>): Product {
+export interface CreateProductPayload extends Omit<Product, 'id' | 'created_at' | 'total_stock_units' | 'composition'> {
+  initial_batch?: {
+    batch_number: string
+    expiry_date: string
+    quantity: number
+    mrp_paise: number
+    purchase_rate_paise: number
+  }
+}
+
+export function createProduct(data: CreateProductPayload): Product {
   const db = getDatabase()
   
   if (data.barcode) {
@@ -225,26 +260,61 @@ export function createProduct(data: Omit<Product, 'id' | 'created_at' | 'total_s
     if (existing) throw new Error('A product with this barcode already exists.')
   }
 
-  const result = db.prepare(`
-    INSERT INTO products (
-      brand_name, generic_name, manufacturer, category, composition_id, 
-      pack_size, barcode, hsn_code, gst_rate_pct, schedule_flag, shelf_rack
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    data.brand_name,
-    data.generic_name || null,
-    data.manufacturer || null,
-    data.category,
-    data.composition_id || null,
-    data.pack_size,
-    data.barcode || null,
-    data.hsn_code || null,
-    data.gst_rate_pct,
-    data.schedule_flag,
-    data.shelf_rack || null
-  )
-  
-  return getProduct(result.lastInsertRowid as number)!
+  const transaction = db.transaction((payload: CreateProductPayload) => {
+    const result = db.prepare(`
+      INSERT INTO products (
+        brand_name, generic_name, manufacturer, category, composition_id, 
+        pack_size, barcode, hsn_code, gst_rate_pct, schedule_flag, shelf_rack
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      payload.brand_name,
+      payload.generic_name || null,
+      payload.manufacturer || null,
+      payload.category,
+      payload.composition_id || null,
+      payload.pack_size,
+      payload.barcode || null,
+      payload.hsn_code || null,
+      payload.gst_rate_pct,
+      payload.schedule_flag,
+      payload.shelf_rack || null
+    )
+    
+    const productId = result.lastInsertRowid as number
+
+    if (payload.initial_batch) {
+      const b = payload.initial_batch
+      const batchResult = db.prepare(`
+        INSERT INTO batches (
+          product_id, batch_number, expiry_date, quantity, 
+          mrp_paise, purchase_rate_paise, gst_rate_pct
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        productId,
+        b.batch_number,
+        b.expiry_date,
+        b.quantity,
+        b.mrp_paise,
+        b.purchase_rate_paise,
+        payload.gst_rate_pct
+      )
+
+      db.prepare(`
+        INSERT INTO stock_ledger (
+          batch_id, movement_type, quantity_delta, actor_user_id, reason
+        ) VALUES (?, 'ADJUSTMENT', ?, ?, 'Initial Stock')
+      `).run(
+        batchResult.lastInsertRowid,
+        b.quantity,
+        1 // Default to user 1 for initial creation
+      )
+    }
+
+    return productId
+  })
+
+  const newProductId = transaction(data)
+  return getProduct(newProductId)!
 }
 
 export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'created_at'>>): Product {

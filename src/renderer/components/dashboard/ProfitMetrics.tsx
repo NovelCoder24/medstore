@@ -1,6 +1,6 @@
 import React from 'react'
 import { useDashboardMetrics } from '../../hooks/useAnalytics'
-import { formatPaise } from '../../../main/utils/paise'
+import { formatPaise } from '../../../shared/utils/paise'
 import { TrendingUp, Receipt, PackageX, IndianRupee, Loader2 } from 'lucide-react'
 
 export function ProfitMetrics() {

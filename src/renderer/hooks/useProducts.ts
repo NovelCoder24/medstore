@@ -1,13 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import type { Product } from '../../main/services/product.service'
 
-export function useProducts(searchParams: { query?: string, categoryId?: string, page?: number, pageSize?: number }) {
+export function useProducts(searchParams: { 
+  query?: string, 
+  categoryId?: string, 
+  page?: number, 
+  pageSize?: number,
+  hideOutOfStock?: boolean,
+  genericOnly?: boolean,
+  ethicalOnly?: boolean,
+  expiringSoon?: boolean,
+  onlyOutOfStock?: boolean
+}) {
   return useQuery({
     queryKey: ['products', searchParams],
     queryFn: async () => {
       return await window.api.invoke(IPC_CHANNELS.PRODUCTS_SEARCH, searchParams)
     }
+  })
+}
+
+export function useProductBatches(productId: number) {
+  return useQuery({
+    queryKey: ['productBatches', productId],
+    queryFn: async () => {
+      return await window.api.invoke(IPC_CHANNELS.BATCHES_LIST_BY_PRODUCT, productId)
+    },
+    enabled: !!productId
   })
 }
 

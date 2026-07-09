@@ -2,6 +2,8 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "compilerOptions": {
     "composite": true,
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
     "types": ["electron-vite/node"],
     "baseUrl": ".",
     "paths": {

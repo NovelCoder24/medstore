@@ -32,7 +32,7 @@ export function ImportCsvModal({ isOpen, onOpenChange }: ImportCsvModalProps) {
 
   useEffect(() => {
     // Listen for progress updates from the worker via IPC
-    const removeListener = window.api.on(IPC_CHANNELS.IMPORT_CSV_PROGRESS, (msg: any) => {
+    const removeListener = window.api.on(IPC_CHANNELS.IMPORT_PROGRESS, (msg: any) => {
       setProgress(msg.percent)
       setStatusText(msg.message)
     })

@@ -11,6 +11,10 @@ export const IPC_CHANNELS = {
   // ── Database (Phase 0) ──
   DB_STATUS: 'db:status',
 
+  // ── Settings (safeStorage) ──
+  SETTINGS_GET_SECRET: 'settings:get-secret',
+  SETTINGS_SET_SECRET: 'settings:set-secret',
+
   // ── Users & Auth (Phase 1) ──
   USERS_LOGIN: 'users:login',
   USERS_VERIFY_OWNER_PIN: 'users:verify-owner-pin',
@@ -25,6 +29,7 @@ export const IPC_CHANNELS = {
   PRODUCTS_GET: 'products:get',
   PRODUCTS_CREATE: 'products:create',
   PRODUCTS_UPDATE: 'products:update',
+  PRODUCTS_DELETE: 'products:delete',
   PRODUCTS_LIST: 'products:list',
 
   // ── Compositions (Phase 1) ──
@@ -45,11 +50,15 @@ export const IPC_CHANNELS = {
   // ── Batches (Phase 2) ──
   BATCHES_LIST_BY_PRODUCT: 'batches:list-by-product',
   BATCHES_UPDATE_STATUS: 'batches:update-status',
+  BATCHES_UPDATE: 'batches:update',
+  BATCHES_DELETE: 'batches:delete',
+  BATCHES_GET_RETURNED: 'batches:get-returned',
 
   // ── Purchases (Phase 2) ──
   PURCHASES_CREATE: 'purchases:create',
   PURCHASES_LIST: 'purchases:list',
   PURCHASES_GET: 'purchases:get',
+  PURCHASES_APPROVE_OCR: 'purchases:approve-ocr',
 
   // ── Expiry (Phase 2) ──
   EXPIRY_DASHBOARD: 'expiry:dashboard',
@@ -78,6 +87,8 @@ export const IPC_CHANNELS = {
   REPORTS_DAILY_SUMMARY: 'reports:daily-summary',
   REPORTS_PROFIT_ANALYSIS: 'reports:profit-analysis',
   REPORTS_EXPIRY_VALUE: 'reports:expiry-value',
+  REPORTS_LOW_STOCK: 'reports:low-stock',
+  REPORTS_GSTR1: 'reports:gstr1',
 
   // ── Supplier Returns (Phase 7) ──
   SUPPLIER_RETURNS_CREATE: 'supplier-returns:create',
@@ -85,6 +96,14 @@ export const IPC_CHANNELS = {
 
   // ── Audit (Phase 7) ──
   AUDIT_LOG_LIST: 'audit:list',
+
+  // ── Customers (Khata) (Phase 7) ──
+  CUSTOMERS_CREATE: 'customers:create',
+  CUSTOMERS_SEARCH: 'customers:search',
+  CUSTOMERS_GET: 'customers:get',
+  CUSTOMERS_LEDGER: 'customers:ledger',
+  CUSTOMERS_ACCEPT_PAYMENT: 'customers:accept-payment',
+  CUSTOMERS_LIST: 'customers:list',
 
   // ── Settings (Phase 1+) ──
   SETTINGS_GET: 'settings:get',

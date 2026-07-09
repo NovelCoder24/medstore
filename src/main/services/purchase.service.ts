@@ -1,6 +1,8 @@
 import { getDatabase } from './db.service'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import { saveVendorOcrCorrection } from './vendor-ocr-profile.service'
+import type { OcrExtractionResult } from '../../shared/types'
 
 export interface PurchasePayload {
   userId: number
@@ -14,12 +16,12 @@ export interface PurchasePayload {
 export interface PurchaseItemPayload {
   productId: number
   batchNumber: string
-  expiryYear: number
-  expiryMonth: number
+  expiryDate: string // YYYY-MM-DD (last day of expiry month)
   quantityPacks: number
   quantityUnits: number
   mrpPaise: number
   purchaseRatePaise: number
+  netRatePaise: number
   gstRatePct: number
   totalPaise: number
 }
@@ -40,26 +42,24 @@ export function createPurchase(payload: PurchasePayload): number {
 
   const insertPurchaseItem = db.prepare(`
     INSERT INTO purchase_items (
-      purchase_invoice_id, product_id, batch_number, expiry_year, expiry_month,
-      quantity_packs, quantity_units, mrp_paise, purchase_rate_paise, gst_rate_pct, total_paise
+      purchase_invoice_id, product_id, batch_number, expiry_date,
+      quantity_packs, quantity_units, mrp_paise, purchase_rate_paise, net_rate_paise, gst_rate_pct, total_paise
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   // Upsert batch (if exact batch + expiry exists for this product, add to quantity. Otherwise create new)
-  // SQLite 3.24+ supports UPSERT (ON CONFLICT), but since we don't have a UNIQUE constraint covering
-  // (product_id, vendor_id, batch_number, expiry_year, expiry_month), we must manually check or use
-  // a targeted query. A pharmacy usually just accumulates stock into the exact same batch if it exists.
-  
+  // A pharmacy usually just accumulates stock into the exact same batch if it exists.
+
   const findBatch = db.prepare(`
     SELECT id, quantity FROM batches 
-    WHERE product_id = ? AND batch_number = ? AND expiry_year = ? AND expiry_month = ?
+    WHERE product_id = ? AND batch_number = ? AND expiry_date = ?
   `)
 
   const insertBatch = db.prepare(`
     INSERT INTO batches (
-      product_id, vendor_id, purchase_item_id, batch_number, expiry_year, expiry_month,
+      product_id, vendor_id, purchase_item_id, batch_number, expiry_date,
       quantity, mrp_paise, purchase_rate_paise, gst_rate_pct, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
   `)
 
   const updateBatchQty = db.prepare(`
@@ -67,7 +67,7 @@ export function createPurchase(payload: PurchasePayload): number {
   `)
 
   const insertMovement = db.prepare(`
-    INSERT INTO stock_movements (
+    INSERT INTO stock_ledger (
       batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
     ) VALUES (?, 'PURCHASE_IN', ?, ?, 'Manual Purchase Entry', ?)
   `)
@@ -82,10 +82,10 @@ export function createPurchase(payload: PurchasePayload): number {
 
     // Insert Invoice
     const invResult = insertInvoice.run(
-      payload.vendorId, 
-      payload.invoiceNumber, 
-      payload.invoiceDate, 
-      payload.userId, 
+      payload.vendorId,
+      payload.invoiceNumber,
+      payload.invoiceDate,
+      payload.userId,
       payload.totalAmountPaise
     )
     const invoiceId = invResult.lastInsertRowid as number
@@ -97,12 +97,12 @@ export function createPurchase(payload: PurchasePayload): number {
         invoiceId,
         item.productId,
         item.batchNumber,
-        item.expiryYear,
-        item.expiryMonth,
+        item.expiryDate,
         item.quantityPacks,
         item.quantityUnits,
         item.mrpPaise,
         item.purchaseRatePaise,
+        item.netRatePaise,
         item.gstRatePct,
         item.totalPaise
       )
@@ -110,10 +110,9 @@ export function createPurchase(payload: PurchasePayload): number {
 
       // Update or Create Batch
       const existingBatch = findBatch.get(
-        item.productId, 
-        item.batchNumber, 
-        item.expiryYear, 
-        item.expiryMonth
+        item.productId,
+        item.batchNumber,
+        item.expiryDate
       ) as { id: number, quantity: number } | undefined
 
       let batchId: number
@@ -128,8 +127,7 @@ export function createPurchase(payload: PurchasePayload): number {
           payload.vendorId,
           purchaseItemId,
           item.batchNumber,
-          item.expiryYear,
-          item.expiryMonth,
+          item.expiryDate,
           item.quantityUnits,
           item.mrpPaise,
           item.purchaseRatePaise,
@@ -153,8 +151,106 @@ export function createPurchase(payload: PurchasePayload): number {
   return executePurchase()
 }
 
+/**
+ * Diff the original Gemini extraction against the owner's corrected values.
+ * Returns an array of field-level corrections (only fields that actually changed).
+ */
+function diffOcrExtraction(
+  rawExtraction: Record<string, unknown>,
+  correctedValues: {
+    vendorName?: string | null
+    invoiceNumber?: string | null
+    invoiceDate?: string | null
+    items: Array<{
+      batchNumber?: string
+      expiryMonth?: number
+      expiryYear?: number
+      mrp?: number
+      purchaseRate?: number
+      productName?: string
+    }>
+  }
+): { field: string; wrongValue: string; correctedValue: string }[] {
+  const diffs: { field: string; wrongValue: string; correctedValue: string }[] = []
+
+  // Header-level diffs
+  const headerFields: Array<[string, unknown, unknown]> = [
+    ['vendorName', rawExtraction.vendorName, correctedValues.vendorName],
+    ['invoiceNumber', rawExtraction.invoiceNumber, correctedValues.invoiceNumber],
+    ['invoiceDate', rawExtraction.invoiceDate, correctedValues.invoiceDate],
+  ]
+
+  for (const [field, rawVal, correctedVal] of headerFields) {
+    const raw = String(rawVal ?? '')
+    const corrected = String(correctedVal ?? '')
+    if (raw !== corrected) {
+      diffs.push({ field, wrongValue: raw, correctedValue: corrected })
+    }
+  }
+
+  // Item-level diffs (compare by index)
+  const rawItems = (rawExtraction.items as Array<Record<string, unknown>>) || []
+  for (let i = 0; i < Math.min(rawItems.length, correctedValues.items.length); i++) {
+    const rawItem = rawItems[i]
+    const corrItem = correctedValues.items[i]
+
+    const itemFields: Array<[string, unknown, unknown]> = [
+      [`items[${i}].batchNumber`, rawItem.batchNumber, corrItem.batchNumber],
+      [`items[${i}].expiryMonth`, rawItem.expiryMonth, corrItem.expiryMonth],
+      [`items[${i}].expiryYear`, rawItem.expiryYear, corrItem.expiryYear],
+      [`items[${i}].mrp`, rawItem.mrp, corrItem.mrp],
+      [`items[${i}].purchaseRate`, rawItem.purchaseRate, corrItem.purchaseRate],
+      [`items[${i}].productName`, rawItem.productName, corrItem.productName],
+    ]
+
+    for (const [field, rawVal, correctedVal] of itemFields) {
+      const raw = String(rawVal ?? '')
+      const corrected = String(correctedVal ?? '')
+      if (raw !== corrected) {
+        diffs.push({ field, wrongValue: raw, correctedValue: corrected })
+      }
+    }
+  }
+
+  return diffs
+}
+
 export function registerPurchaseHandlers() {
   ipcMain.handle(IPC_CHANNELS.PURCHASES_CREATE, (_, payload: PurchasePayload) => {
     return createPurchase(payload)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PURCHASES_APPROVE_OCR, (_, payload: {
+    purchase: PurchasePayload
+    rawExtraction: Record<string, unknown>
+    correctedValues: {
+      vendorName?: string | null
+      invoiceNumber?: string | null
+      invoiceDate?: string | null
+      items: Array<{
+        batchNumber?: string
+        expiryMonth?: number
+        expiryYear?: number
+        mrp?: number
+        purchaseRate?: number
+        productName?: string
+      }>
+    }
+  }) => {
+    // 1. Commit the purchase — this is the critical path
+    const invoiceId = createPurchase(payload.purchase)
+
+    // 2. Best-effort correction learning — NEVER blocks the purchase
+    try {
+      const diffs = diffOcrExtraction(payload.rawExtraction, payload.correctedValues)
+      if (diffs.length > 0 && payload.purchase.vendorId) {
+        saveVendorOcrCorrection(payload.purchase.vendorId, diffs)
+        console.log(`[OCR-Learn] Saved ${diffs.length} correction(s) for vendor ${payload.purchase.vendorId}`)
+      }
+    } catch (err) {
+      console.error('[OCR-Learn] Failed to save vendor corrections (non-blocking):', err)
+    }
+
+    return invoiceId
   })
 }

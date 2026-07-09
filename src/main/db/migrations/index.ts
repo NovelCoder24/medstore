@@ -10,6 +10,11 @@
 
 import * as m001 from './001_initial_schema'
 import * as m002 from './002_fts5_products'
+import * as m003 from './003_settings'
+import * as m004 from './004_purchase_net_rate'
+import * as m005 from './005_fix_fts5'
+import * as m006 from './006_batches_indexes'
+import * as m007 from './007_customers'
 
 export interface Migration {
   version: number
@@ -17,6 +22,14 @@ export interface Migration {
   sql: string
 }
 
-export const migrations: Migration[] = [m001, m002].sort(
+export const migrations: Migration[] = [
+  m001,
+  m002,
+  m003,
+  m004,
+  m005,
+  m006,
+  m007
+].sort(
   (a, b) => a.version - b.version
 )

@@ -95,8 +95,7 @@ CREATE TABLE IF NOT EXISTS batches (
     vendor_id           INTEGER REFERENCES vendors(id),
     purchase_item_id    INTEGER,
     batch_number        TEXT    NOT NULL,
-    expiry_year         INTEGER NOT NULL,
-    expiry_month        INTEGER NOT NULL CHECK(expiry_month BETWEEN 1 AND 12),
+    expiry_date         TEXT    NOT NULL, -- Format: YYYY-MM-DD (use last day of month)
     quantity            INTEGER NOT NULL DEFAULT 0,
     mrp_paise           INTEGER NOT NULL,
     purchase_rate_paise INTEGER NOT NULL DEFAULT 0,
@@ -109,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_batches_product_status
     ON batches(product_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_batches_expiry
-    ON batches(expiry_year, expiry_month);
+    ON batches(expiry_date);
 
 CREATE INDEX IF NOT EXISTS idx_batches_vendor
     ON batches(vendor_id);
@@ -117,7 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_batches_vendor
 -- ─────────────────────────────────────────
 -- Stock Movements (ledger)
 -- ─────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS stock_movements (
+CREATE TABLE IF NOT EXISTS stock_ledger (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_id          INTEGER NOT NULL REFERENCES batches(id),
     movement_type     TEXT    NOT NULL CHECK(movement_type IN (
@@ -132,10 +131,10 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 
 CREATE INDEX IF NOT EXISTS idx_stock_movements_batch
-    ON stock_movements(batch_id);
+    ON stock_ledger(batch_id);
 
 CREATE INDEX IF NOT EXISTS idx_stock_movements_actor
-    ON stock_movements(actor_user_id);
+    ON stock_ledger(actor_user_id);
 
 -- ─────────────────────────────────────────
 -- Sales
@@ -233,8 +232,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
     purchase_invoice_id     INTEGER NOT NULL REFERENCES purchase_invoices(id),
     product_id              INTEGER NOT NULL REFERENCES products(id),
     batch_number            TEXT    NOT NULL,
-    expiry_year             INTEGER NOT NULL,
-    expiry_month            INTEGER NOT NULL CHECK(expiry_month BETWEEN 1 AND 12),
+    expiry_date             TEXT    NOT NULL,
     quantity_packs          INTEGER NOT NULL,
     quantity_units          INTEGER NOT NULL,
     mrp_paise               INTEGER NOT NULL,

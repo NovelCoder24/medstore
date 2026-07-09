@@ -45,7 +45,7 @@ function runImport() {
 
     db.transaction(() => {
       for (let i = 0; i < records.length; i++) {
-        const row = records[i]
+        const row = records[i] as any
         try {
           // Very basic validation/mapping based on typical pharmacy CSVs
           if (!row.brand_name) {

@@ -10,6 +10,16 @@ export default defineConfig({
       alias: {
         '@shared': resolve('src/shared')
       }
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          'backup.worker': resolve('src/main/workers/backup.worker.ts'),
+          'import.worker': resolve('src/main/workers/import.worker.ts'),
+          'reports.worker': resolve('src/main/workers/reports.worker.ts')
+        }
+      }
     }
   },
   preload: {

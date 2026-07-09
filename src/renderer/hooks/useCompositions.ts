@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import type { Composition } from '../../main/services/composition.service'
 
 export function useCompositions() {

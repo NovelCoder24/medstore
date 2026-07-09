@@ -68,7 +68,7 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
       </div>
 
       {isOpen && data?.data && data.data.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-card border rounded-md shadow-lg max-h-96 overflow-y-auto">
+        <div className="absolute z-[100] w-full mt-1 bg-white border rounded-md shadow-xl max-h-96 overflow-y-auto">
           <ul className="py-1">
             {data.data.map((product) => (
               <li key={product.id}>

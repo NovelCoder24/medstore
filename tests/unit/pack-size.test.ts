@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { packsToUnits, unitsToDisplay, formatStock } from '../../src/main/utils/pack-size'
+import { packsToUnits, unitsToDisplay, formatStock } from '../../src/shared/utils/pack-size'
 
 describe('Pack-size utility', () => {
   it('packsToUnits converts packs to atomic units', () => {

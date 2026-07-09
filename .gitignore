@@ -35,3 +35,7 @@ npm-debug.log*
 
 # Coverage
 coverage/
+
+# Vite / TS builds
+electron.vite.config.*.mjs
+*.tsbuildinfo

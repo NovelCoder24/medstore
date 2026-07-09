@@ -4,7 +4,7 @@ import { CartTable } from './CartTable'
 import { CheckoutModal } from './CheckoutModal'
 import { useCartStore } from '../../store/cart.store'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
-import { formatPaise } from '../../../main/utils/paise'
+import { formatPaise } from '../../../shared/utils/paise'
 import { ShoppingBag, Receipt } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 
@@ -28,6 +28,11 @@ export function PosBilling() {
       // Auto-select FIFO (First to Expire) batch
       const batch = batches[0]
       
+      const unitMrp = Math.round(batch.mrp_paise / product.pack_size)
+      const unitPurchaseRate = Math.round((batch.purchase_rate_paise || 0) / product.pack_size)
+      
+      const initialQty = Math.min(product.pack_size, batch.quantity)
+      
       addItem({
         productId: product.id,
         brandName: product.brand_name,
@@ -35,10 +40,13 @@ export function PosBilling() {
         batchId: batch.id,
         batchNumber: batch.batch_number,
         expiryDate: batch.expiry_date,
-        mrpPaise: batch.mrp_paise,
-        salePricePaise: batch.sale_price_paise,
-        discountPaise: 0,
-        quantityUnits: product.pack_size, // Default to 1 full pack
+        availableQuantity: batch.quantity,
+        scheduleFlag: product.schedule_flag || 'NONE',
+        mrpPaise: unitMrp as any,
+        purchaseRatePaise: unitPurchaseRate as any,
+        salePricePaise: unitMrp as any, // Default sale price is MRP
+        discountPaise: Math.round(unitMrp * 0.10) as any,
+        quantityUnits: initialQty, // Default to 1 full pack or whatever is left
         gstRatePct: product.gst_rate_pct,
         isInterState: false // Default to intra-state unless modified
       })
@@ -58,7 +66,7 @@ export function PosBilling() {
       <div className="flex gap-4 h-[calc(100vh-140px)]">
         {/* Left Side: Search & Cart */}
         <div className="flex flex-col flex-[3] gap-4">
-          <div className="z-10">
+          <div className="relative z-50">
             <ProductSearchDropdown onSelectProduct={handleProductSelect} />
             {errorMsg && (
               <p className="text-sm text-red-500 mt-2 px-2 animate-in slide-in-from-top-2">{errorMsg}</p>

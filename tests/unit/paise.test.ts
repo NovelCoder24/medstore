@@ -9,7 +9,7 @@ import {
   percentOfPaise,
   assertPaise,
   Paise
-} from '../../src/main/utils/paise'
+} from '../../src/shared/utils/paise'
 
 describe('Paise utility', () => {
   it('toPaise converts rupees to paise', () => {

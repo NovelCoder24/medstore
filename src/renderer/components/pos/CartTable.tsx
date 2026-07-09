@@ -1,11 +1,17 @@
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import { useCartStore } from '../../store/cart.store'
-import { Trash2, Plus, Minus } from 'lucide-react'
-import { formatPaise } from '../../../main/utils/paise'
-import { unitsToDisplay } from '../../../main/utils/pack-size'
+import { Trash2, Plus, Minus, AlertTriangle } from 'lucide-react'
+import { formatPaise } from '../../../shared/utils/paise'
+import { unitsToDisplay } from '../../../shared/utils/pack-size'
 
 export function CartTable() {
   const { items, updateQuantity, updateDiscount, removeItem } = useCartStore()
+  const [warning, setWarning] = useState<string | null>(null)
+
+  const showWarning = useCallback((msg: string) => {
+    setWarning(msg)
+    setTimeout(() => setWarning(null), 3000)
+  }, [])
 
   if (items.length === 0) {
     return (
@@ -17,14 +23,20 @@ export function CartTable() {
   }
 
   return (
-    <div className="flex-1 overflow-auto border rounded-lg bg-card shadow-sm">
+    <div className="flex-1 overflow-auto border rounded-lg bg-card shadow-sm relative">
+      {warning && (
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-amber-800 bg-amber-50 border-b border-amber-200 animate-in slide-in-from-top-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {warning}
+        </div>
+      )}
       <table className="w-full text-sm text-left">
         <thead className="sticky top-0 bg-muted/50 border-b">
           <tr>
             <th className="px-4 py-3 font-medium">Product & Batch</th>
             <th className="px-4 py-3 font-medium text-center">Qty (Units)</th>
             <th className="px-4 py-3 font-medium text-right">MRP</th>
-            <th className="px-4 py-3 font-medium text-right">Disc. (per unit)</th>
+            <th className="px-4 py-3 font-medium text-right">Disc. (%)</th>
             <th className="px-4 py-3 font-medium text-right">Total (Inc. Tax)</th>
             <th className="px-4 py-3 font-medium text-center">Action</th>
           </tr>
@@ -47,18 +59,41 @@ export function CartTable() {
                 </td>
                 
                 <td className="px-4 py-3">
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={() => updateQuantity(item.id, Math.max(1, item.quantityUnits - 1))}
                       className="p-1 rounded-md bg-muted hover:bg-muted-foreground/20 transition-colors"
                     >
                       <Minus className="w-4 h-4" />
                     </button>
-                    <span className="w-8 text-center font-medium text-base">
-                      {item.quantityUnits}
-                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      className="w-12 text-center py-1 border rounded-md outline-none focus:ring-1 focus:ring-primary font-medium text-base hide-arrows"
+                      value={item.quantityUnits}
+                      onChange={(e) => {
+                        let val = parseInt(e.target.value)
+                        
+                        if (isNaN(val) || val < 1) {
+                          val = 1
+                        }
+                        
+                        if (val > item.availableQuantity) {
+                          showWarning(`Batch limit reached for ${item.brandName}. Only ${item.availableQuantity} available.`)
+                          val = item.availableQuantity
+                        }
+                        
+                        updateQuantity(item.id, val)
+                      }}
+                    />
                     <button
-                      onClick={() => updateQuantity(item.id, item.quantityUnits + 1)}
+                      onClick={() => {
+                        if (item.quantityUnits >= item.availableQuantity) {
+                          showWarning(`Batch limit reached for ${item.brandName}. Add the product again to select the next batch.`)
+                        } else {
+                          updateQuantity(item.id, item.quantityUnits + 1)
+                        }
+                      }}
                       className="p-1 rounded-md bg-muted hover:bg-muted-foreground/20 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
@@ -67,24 +102,27 @@ export function CartTable() {
                 </td>
                 
                 <td className="px-4 py-3 text-right">
-                  {formatPaise(item.mrpPaise)}
+                  {formatPaise(item.mrpPaise * item.packSize)}
                 </td>
                 
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end">
                     <div className="relative w-24">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
                       <input
                         type="number"
                         min="0"
-                        step="0.01"
-                        className="w-full pl-7 pr-2 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary"
-                        value={item.discountPaise / 100}
+                        max="100"
+                        step="0.1"
+                        className="w-full pl-2 pr-7 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary"
+                        value={item.mrpPaise > 0 ? ((item.discountPaise / item.mrpPaise) * 100).toFixed(1).replace(/\.0$/, '') : 0}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value) || 0
-                          updateDiscount(item.id, Math.round(val * 100))
+                          const safeVal = Math.min(100, Math.max(0, val))
+                          const newDiscountPaise = Math.round((safeVal / 100) * item.mrpPaise)
+                          updateDiscount(item.id, newDiscountPaise)
                         }}
                       />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                     </div>
                   </div>
                 </td>

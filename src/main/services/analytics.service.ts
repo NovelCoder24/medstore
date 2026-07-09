@@ -2,6 +2,8 @@ import { getDatabase } from './db.service'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 
+import type { Paise } from '../../shared/utils/paise'
+
 export interface ExpiryAlert {
   batchId: number
   productId: number
@@ -14,8 +16,8 @@ export interface ExpiryAlert {
 }
 
 export interface DashboardMetrics {
-  todaySalesPaise: number
-  todayProfitPaise: number
+  todaySalesPaise: Paise
+  todayProfitPaise: Paise
   todayBillsCount: number
   lowStockItemsCount: number
 }
@@ -33,23 +35,50 @@ export function getExpiryAlerts(): ExpiryAlert[] {
       p.id as productId,
       p.brand_name as brandName,
       b.batch_number as batchNumber,
-      b.expiry_month as expiryMonth,
-      b.expiry_year as expiryYear,
+      b.expiry_date as expiryDate,
       b.quantity,
       CAST(
-        julianday(
-          date(printf('%04d-%02d-01', b.expiry_year, b.expiry_month), '+1 month', '-1 day')
-        ) - julianday(date('now', 'localtime')) 
+        julianday(b.expiry_date) - julianday(date('now', 'localtime')) 
       AS INTEGER) as daysUntilExpiry
     FROM batches b
     JOIN products p ON b.product_id = p.id
     WHERE b.status = 'ACTIVE' 
       AND b.quantity > 0
-      AND daysUntilExpiry <= 180 -- Alert starting 6 months out (typical for pharmacy)
+      AND CAST(julianday(b.expiry_date) - julianday(date('now', 'localtime')) AS INTEGER) <= 180 -- Alert starting 6 months out
     ORDER BY daysUntilExpiry ASC
   `
   
   return db.prepare(query).all() as ExpiryAlert[]
+}
+
+export interface LowStockAlert {
+  productId: number
+  brandName: string
+  shelfRack: string | null
+  totalQuantity: number
+  packSize: number
+}
+
+export function getLowStockAlerts(): LowStockAlert[] {
+  const db = getDatabase()
+  
+  const query = `
+    SELECT 
+      p.id as productId,
+      p.brand_name as brandName,
+      p.shelf_rack as shelfRack,
+      p.pack_size as packSize,
+      COALESCE(SUM(b.quantity), 0) as totalQuantity
+    FROM products p
+    LEFT JOIN batches b ON p.id = b.product_id AND b.status = 'ACTIVE'
+    WHERE p.is_active = 1
+    GROUP BY p.id
+    HAVING totalQuantity <= (p.pack_size * 2)
+    ORDER BY totalQuantity ASC
+    LIMIT 10
+  `
+  
+  return db.prepare(query).all() as LowStockAlert[]
 }
 
 export function getDashboardMetrics(): DashboardMetrics {
@@ -73,11 +102,12 @@ export function getDashboardMetrics(): DashboardMetrics {
   const profitQuery = `
     SELECT 
       COALESCE(SUM(
-        ((si.unit_price_paise * si.quantity) - si.discount_paise) - (b.purchase_rate_paise * si.quantity)
+        ((si.unit_price_paise * si.quantity) - si.discount_paise) - ((b.purchase_rate_paise / p.pack_size) * si.quantity)
       ), 0) as todayProfitPaise
     FROM sale_items si
     JOIN sales s ON si.sale_id = s.id
     JOIN batches b ON si.batch_id = b.id
+    JOIN products p ON b.product_id = p.id
     WHERE date(s.created_at, 'localtime') = date('now', 'localtime')
   `
   
@@ -86,22 +116,22 @@ export function getDashboardMetrics(): DashboardMetrics {
   // 3. Low Stock Items (Active products with total stock <= pack_size * 2)
   // For simplicity, let's just count products with 0 stock.
   const lowStockQuery = `
-    SELECT COUNT(p.id) as lowStockItemsCount
-    FROM products p
-    LEFT JOIN batches b ON p.id = b.product_id AND b.status = 'ACTIVE'
-    WHERE p.is_active = 1
-    GROUP BY p.id
-    HAVING COALESCE(SUM(b.quantity), 0) <= (p.pack_size * 2)
+    SELECT COUNT(*) as count FROM (
+      SELECT p.id
+      FROM products p
+      LEFT JOIN batches b ON p.id = b.product_id AND b.status = 'ACTIVE'
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      HAVING COALESCE(SUM(b.quantity), 0) <= (p.pack_size * 2)
+    )
   `
-  
-  // We need to count the rows returned by the GROUP BY
-  const lowStockRows = db.prepare(lowStockQuery).all()
-  
+  const lowStockRow = db.prepare(lowStockQuery).get() as { count: number }
+
   return {
-    todaySalesPaise: salesResult.todaySalesPaise,
+    todaySalesPaise: salesResult.todaySalesPaise as Paise,
+    todayProfitPaise: profitResult.todayProfitPaise as Paise,
     todayBillsCount: salesResult.todayBillsCount,
-    todayProfitPaise: profitResult.todayProfitPaise,
-    lowStockItemsCount: lowStockRows.length
+    lowStockItemsCount: lowStockRow.count
   }
 }
 
@@ -112,5 +142,9 @@ export function registerAnalyticsHandlers() {
   
   ipcMain.handle(IPC_CHANNELS.REPORTS_DAILY_SUMMARY, () => {
     return getDashboardMetrics()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.REPORTS_LOW_STOCK, () => {
+    return getLowStockAlerts()
   })
 }

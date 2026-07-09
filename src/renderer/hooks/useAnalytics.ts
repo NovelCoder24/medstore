@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { IPC_CHANNELS } from '../../../shared/ipc-channels'
-import type { ExpiryAlert, DashboardMetrics } from '../../main/services/analytics.service'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
+import type { ExpiryAlert, DashboardMetrics, LowStockAlert } from '../../main/services/analytics.service'
 
 export function useExpiryAlerts() {
   return useQuery({
@@ -22,5 +22,16 @@ export function useDashboardMetrics() {
     // Metrics should update relatively often
     staleTime: 60 * 1000,
     refetchInterval: 60 * 1000 // auto refresh every minute
+  })
+}
+
+export function useLowStockAlerts() {
+  return useQuery({
+    queryKey: ['analytics', 'low-stock-alerts'],
+    queryFn: async () => {
+      return await window.api.invoke(IPC_CHANNELS.REPORTS_LOW_STOCK) as LowStockAlert[]
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000
   })
 }

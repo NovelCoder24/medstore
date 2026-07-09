@@ -12,8 +12,14 @@ import { registerPurchaseHandlers } from './services/purchase.service'
 import { registerPrintHandlers } from './services/print.service'
 import { registerOcrHandlers } from './services/ocr.service'
 import { registerAnalyticsHandlers } from './services/analytics.service'
+import { registerSettingsHandlers } from './services/settings.service'
+import { registerAuditHandlers } from './services/audit.service'
+import { registerBackupHandlers, createBackup, startScheduledBackups } from './services/backup.service'
+import { registerCustomerHandlers } from './services/customer.service'
+import { registerReportsHandlers } from './services/reports.service'
 
 function createWindow(): void {
+  console.log("=== MedStore Documents Path: ===", app.getPath('documents'))
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1024,
@@ -27,6 +33,8 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
+
+  // mainWindow.webContents.openDevTools()
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -71,6 +79,12 @@ app.whenReady().then(() => {
     registerPrintHandlers()
     registerOcrHandlers()
     registerAnalyticsHandlers()
+    registerSettingsHandlers()
+    registerAuditHandlers()
+    registerBackupHandlers()
+    startScheduledBackups()
+    registerCustomerHandlers()
+    registerReportsHandlers()
   } catch (error) {
     console.error('Failed to initialize database:', error)
     app.quit()
@@ -86,9 +100,32 @@ app.whenReady().then(() => {
   })
 })
 
+let isBackingUp = false
+
+app.on('before-quit', async (event) => {
+  if (isBackingUp) {
+    event.preventDefault()
+    return
+  }
+
+  // Prevent immediate quit to allow backup
+  event.preventDefault()
+  isBackingUp = true
+
+  console.log('Running automated backup before quit...')
+  try {
+    await createBackup()
+    console.log('Automated backup completed successfully.')
+  } catch (error) {
+    console.error('Automated backup failed:', error)
+  }
+
+  closeDatabase()
+  app.exit(0)
+})
+
 // Quit when all windows are closed, except on macOS.
 app.on('window-all-closed', () => {
-  closeDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }

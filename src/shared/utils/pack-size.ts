@@ -66,20 +66,19 @@ export function unitsToDisplay(
  * @example formatStock(7, 15)  → "7 loose"
  * @example formatStock(5, 1)   → "5"
  */
-export function formatStock(units: number, packSize: number): string {
+export function formatStock(totalAtomicQty: number, packSize: number): string {
+  if (totalAtomicQty === 0) return 'Out of Stock';
+  
+  // For Syrups, Ointments, Injections (Pack size is 1)
   if (packSize === 1) {
-    return `${units}`
+    return `${totalAtomicQty} Units`; 
   }
 
-  const { packs, loose } = unitsToDisplay(units, packSize)
-  const parts: string[] = []
+  // For Tablets/Capsules (Pack size > 1)
+  const strips = Math.floor(totalAtomicQty / packSize);
+  const loosePills = totalAtomicQty % packSize;
 
-  if (packs > 0) {
-    parts.push(`${packs} strip${packs > 1 ? 's' : ''}`)
-  }
-  if (loose > 0) {
-    parts.push(`${loose} loose`)
-  }
-
-  return parts.length > 0 ? parts.join(' + ') : '0'
+  if (strips > 0 && loosePills > 0) return `${strips} Strips + ${loosePills} Pills`;
+  if (strips > 0 && loosePills === 0) return `${strips} Strips`;
+  return `${loosePills} Pills`; // Less than 1 strip
 }

@@ -69,7 +69,7 @@ export function ExpiryAlerts() {
                 <td className="px-4 py-2 font-medium">{item.brandName}</td>
                 <td className="px-4 py-2">{item.batchNumber}</td>
                 <td className="px-4 py-2 text-center font-medium">
-                  {item.expiryMonth.toString().padStart(2, '0')}/{item.expiryYear}
+                  {item.expiryDate ? `${item.expiryDate.slice(5, 7)}/${item.expiryDate.slice(0, 4)}` : 'N/A'}
                 </td>
                 <td className="px-4 py-2 text-right">{item.quantity} units</td>
               </tr>

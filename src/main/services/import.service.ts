@@ -52,7 +52,7 @@ export function registerImportHandlers() {
     try {
       const result = await runCsvImport(csvPath, (progressMsg) => {
         // Send progress events back to the specific renderer that invoked it
-        event.sender.send(IPC_CHANNELS.IMPORT_CSV_PROGRESS, progressMsg)
+        event.sender.send(IPC_CHANNELS.IMPORT_PROGRESS, progressMsg)
       })
       return result
     } catch (err: any) {

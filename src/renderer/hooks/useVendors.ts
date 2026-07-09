@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import type { Vendor } from '../../main/services/vendor.service'
 
 export function useVendors() {

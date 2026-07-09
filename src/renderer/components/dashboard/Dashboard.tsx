@@ -2,6 +2,7 @@ import React from 'react'
 import { useAuthStore } from '../../store/auth.store'
 import { ProfitMetrics } from './ProfitMetrics'
 import { ExpiryAlerts } from './ExpiryAlerts'
+import { LowStockAlerts } from './LowStockAlerts'
 import { LayoutDashboard } from 'lucide-react'
 
 export function Dashboard() {
@@ -25,12 +26,9 @@ export function Dashboard() {
           <ExpiryAlerts />
         </div>
         
-        {/* Placeholder for future features (e.g., Sales Chart, Fast Moving Items) */}
-        <div className="hidden lg:flex flex-col h-full">
-          <div className="bg-card border rounded-lg shadow-sm p-8 flex flex-col items-center justify-center text-center text-muted-foreground h-[300px]">
-            <h3 className="font-medium text-lg mb-2">More Analytics Coming Soon</h3>
-            <p className="text-sm max-w-sm">We'll be adding top-selling products, sales trends, and vendor insights here in future updates.</p>
-          </div>
+        {/* Low Stock Action List */}
+        <div className="flex flex-col h-full min-h-[300px]">
+          <LowStockAlerts />
         </div>
       </div>
     </div>
