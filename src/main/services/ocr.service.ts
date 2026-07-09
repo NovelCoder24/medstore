@@ -9,7 +9,8 @@ import { z } from 'zod'
 import crypto from 'crypto'
 import type { OcrExtractionResult, OcrExtractedItem } from '../../shared/types'
 
-const MODEL_NAME = 'gemini-2.5-flash'
+const MODEL_NAME = 'gemini-3.1-flash-lite'
+
 
 // ── Helpers ──
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -81,7 +82,7 @@ const OcrExtractionSchema = z.object({
 function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string): string {
   const userDataPath = app.getPath('userData')
   const invoicesDir = path.join(userDataPath, 'invoices')
-  
+
   if (!fs.existsSync(invoicesDir)) {
     fs.mkdirSync(invoicesDir, { recursive: true })
   }
@@ -89,7 +90,7 @@ function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string)
   const ext = mimeType === 'application/pdf' ? '.pdf' : mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg'
   const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`
   const filePath = path.join(invoicesDir, filename)
-  
+
   fs.writeFileSync(filePath, Buffer.from(buffer as any))
   return filePath
 }
@@ -103,7 +104,7 @@ export async function extractInvoiceData(
   vendorHint?: { vendorId?: number; gstin?: string; nameHint?: string }
 ): Promise<OcrExtractionResult> {
   const apiKey = getSecretSetting('GEMINI_API_KEY')
-  
+
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not set. Please configure it in settings.')
   }
@@ -162,7 +163,7 @@ export async function extractInvoiceData(
   let response: any
   let attempt = 0
   const maxAttempts = 3
-  
+
   while (attempt < maxAttempts) {
     try {
       let timeoutId: NodeJS.Timeout
