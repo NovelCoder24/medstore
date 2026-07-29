@@ -61,6 +61,10 @@ export function getCustomerLedger(customerId: number): CustomerLedgerEntry[] {
 }
 
 export function acceptPayment(customerId: number, amountPaise: number, referenceId?: string): Customer {
+  if (!amountPaise || amountPaise <= 0) {
+    throw new Error('Payment amount must be greater than zero')
+  }
+
   const db = getDatabase()
   const transaction = db.transaction(() => {
     db.prepare(`

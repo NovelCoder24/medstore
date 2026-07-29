@@ -2,6 +2,7 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
   "compilerOptions": {
     "composite": true,
+    "noImplicitAny": true,
     "jsx": "react-jsx",
     "moduleResolution": "bundler",
     "baseUrl": ".",

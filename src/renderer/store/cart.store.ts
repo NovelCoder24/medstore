@@ -41,7 +41,8 @@ interface CartState {
   // Actions
   addItem: (item: Omit<CartLineItem, 'id' | 'gstBreakdown'>) => void
   updateQuantity: (id: string, quantityUnits: number) => void
-  updateDiscount: (id: string, discountPaise: number) => void
+  updateTotal: (id: string, totalPaise: number) => void
+  changeBatch: (id: string, batch: { batchId: number; batchNumber: string; expiryDate: string; availableQuantity: number; mrpPaise: number; purchaseRatePaise: number }) => void
   removeItem: (id: string) => void
   updatePatient: (patient: Partial<PatientDetails>) => void
   clearCart: () => void
@@ -145,6 +146,69 @@ export const useCartStore = create<CartState>((set, get) => ({
               item.quantityUnits,
               item.gstRatePct,
               item.isInterState
+            )
+          }
+        }
+        return item
+      })
+    }))
+  },
+
+  updateTotal: (id, totalPaise) => {
+    set((state) => ({
+      items: state.items.map(item => {
+        if (item.id === id) {
+          const totalBasePaise = item.salePricePaise * item.quantityUnits
+          const totalDiscountPaise = Math.max(0, totalBasePaise - totalPaise)
+          const newDiscountPaise = item.quantityUnits > 0
+            ? Math.min(item.salePricePaise, Math.round(totalDiscountPaise / item.quantityUnits))
+            : 0
+
+          return {
+            ...item,
+            discountPaise: newDiscountPaise,
+            gstBreakdown: calculateItemGst(
+              item.salePricePaise,
+              newDiscountPaise,
+              item.quantityUnits,
+              item.gstRatePct,
+              item.isInterState
+            )
+          }
+        }
+        return item
+      })
+    }))
+  },
+
+  changeBatch: (id, batch) => {
+    set((state) => ({
+      items: state.items.map(item => {
+        if (item.id === id) {
+          const unitMrp = Math.round(batch.mrpPaise / item.packSize)
+          const unitPurchaseRate = Math.round(batch.purchaseRatePaise / item.packSize)
+          const newQty = Math.min(item.quantityUnits, batch.availableQuantity)
+
+          const updated = {
+            ...item,
+            batchId: batch.batchId,
+            batchNumber: batch.batchNumber,
+            expiryDate: batch.expiryDate,
+            availableQuantity: batch.availableQuantity,
+            mrpPaise: unitMrp as any,
+            purchaseRatePaise: unitPurchaseRate as any,
+            salePricePaise: unitMrp as any,
+            quantityUnits: newQty,
+          }
+
+          return {
+            ...updated,
+            gstBreakdown: calculateItemGst(
+              updated.salePricePaise,
+              updated.discountPaise,
+              newQty,
+              updated.gstRatePct,
+              updated.isInterState
             )
           }
         }

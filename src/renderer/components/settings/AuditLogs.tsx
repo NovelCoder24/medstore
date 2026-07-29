@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
-import { Loader2, ArrowLeft, ArrowRight, Eye } from 'lucide-react'
+import { Loader2, ArrowLeft, ArrowRight, Eye, Filter } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
+import { AuditDetailsModal } from './AuditDetailsModal'
 
 function formatDateTime(isoString: string) {
   return new Date(isoString).toLocaleString('en-IN', {
@@ -13,22 +14,79 @@ function formatDateTime(isoString: string) {
 export function AuditLogs() {
   const [page, setPage] = useState(1)
   const pageSize = 20
+  
+  const [actionFilter, setActionFilter] = useState('ALL')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['auditLogs', page],
+    queryKey: ['auditLogs', page, actionFilter, startDate, endDate],
     queryFn: async () => {
-      return await window.api.invoke(IPC_CHANNELS.AUDIT_LOG_LIST, { page, pageSize })
+      return await window.api.invoke(IPC_CHANNELS.AUDIT_LOG_LIST, { 
+        page, 
+        pageSize,
+        filters: { action: actionFilter, startDate, endDate }
+      })
     }
   })
 
   const [selectedLog, setSelectedLog] = useState<any>(null)
 
+  // Extract unique actions for the filter dropdown if we wanted to make it dynamic, 
+  // but let's just use some common ones plus ALL for now.
+  const ACTION_TYPES = [
+    'ALL',
+    'UPDATE_BATCH'
+  ]
+
   return (
     <div className="flex flex-col h-full space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold tracking-tight">Audit Trail</h2>
-        <div className="text-sm text-muted-foreground">
-          Immutable log of critical system actions
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Audit Trail</h2>
+          <div className="text-sm text-muted-foreground">
+            Immutable log of critical system actions
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex gap-4 p-4 border rounded-md bg-card/50 items-end">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
+          <select 
+            value={actionFilter} 
+            onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          >
+            {ACTION_TYPES.map(a => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+          <input 
+            type="date" 
+            value={startDate}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+          <input 
+            type="date" 
+            value={endDate}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            className="px-3 py-1.5 border rounded-md text-sm bg-background"
+          />
+        </div>
+        <div className="flex flex-col justify-end pb-0.5">
+          <button 
+            onClick={() => { setActionFilter('ALL'); setStartDate(''); setEndDate(''); setPage(1); }}
+            className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground underline underline-offset-4"
+          >
+            Clear Filters
+          </button>
         </div>
       </div>
 
@@ -40,10 +98,8 @@ export function AuditLogs() {
             <thead className="sticky top-0 bg-muted/95 backdrop-blur border-b z-10">
               <tr>
                 <th className="px-4 py-3 font-medium">Timestamp</th>
-                <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">Entity Type</th>
+                <th className="px-4 py-3 font-medium">Action Details</th>
                 <th className="px-4 py-3 font-medium">Actor</th>
-                <th className="px-4 py-3 font-medium">Override Auth</th>
                 <th className="px-4 py-3 font-medium">Reason</th>
                 <th className="px-4 py-3 font-medium w-16">Details</th>
               </tr>
@@ -51,13 +107,13 @@ export function AuditLogs() {
             <tbody className="divide-y overflow-y-auto">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : data?.data.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                     No audit logs found.
                   </td>
                 </tr>
@@ -65,13 +121,16 @@ export function AuditLogs() {
                 data?.data.map((log: any) => (
                   <tr key={log.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 whitespace-nowrap">{formatDateTime(log.created_at)}</td>
-                    <td className="px-4 py-3 font-medium">{log.action}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {log.entity_type} {log.entity_id ? `#${log.entity_id}` : ''}
+                    <td className="px-4 py-3">
+                      <span className="font-semibold">{log.action}</span> on {log.entity_name || `${log.entity_type} #${log.entity_id}`}
                     </td>
-                    <td className="px-4 py-3">{log.actor_name || `User ${log.actor_user_id}`}</td>
-                    <td className="px-4 py-3 text-orange-600">
-                      {log.override_name ? `Override: ${log.override_name}` : '-'}
+                    <td className="px-4 py-3 flex items-center gap-2">
+                      <span>{log.actor_name || `User ${log.actor_user_id}`}</span>
+                      {log.override_name && (
+                        <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 border-red-200">
+                          Manager Override
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">{log.reason || '-'}</td>
                     <td className="px-4 py-3">
@@ -90,7 +149,7 @@ export function AuditLogs() {
           </table>
           
           {/* Pagination */}
-          <div className="flex items-center justify-between p-3 border-t bg-muted/20">
+          <div className="flex items-center justify-between p-3 border-t bg-muted/20 mt-auto">
             <div className="text-sm text-muted-foreground">
               Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, data?.total || 0)} of {data?.total || 0}
             </div>
@@ -98,14 +157,14 @@ export function AuditLogs() {
               <button
                 disabled={page === 1}
                 onClick={() => setPage(p => p - 1)}
-                className="p-1 rounded hover:bg-muted disabled:opacity-50"
+                className="p-1 rounded hover:bg-muted disabled:opacity-50 border bg-background"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <button
                 disabled={!data || data.data.length < pageSize}
                 onClick={() => setPage(p => p + 1)}
-                className="p-1 rounded hover:bg-muted disabled:opacity-50"
+                className="p-1 rounded hover:bg-muted disabled:opacity-50 border bg-background"
               >
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -114,36 +173,9 @@ export function AuditLogs() {
         </div>
       )}
 
-      {/* JSON Viewer Modal */}
+      {/* Diff Table Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-background rounded-lg shadow-lg w-full max-w-3xl flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-semibold text-lg">
-                Audit Details: {selectedLog.action}
-              </h3>
-              <button onClick={() => setSelectedLog(null)} className="text-muted-foreground hover:text-foreground">&times;</button>
-            </div>
-            <div className="p-4 overflow-auto flex-1 flex gap-4">
-              <div className="flex-1 bg-muted/30 p-2 rounded border font-mono text-xs overflow-auto">
-                <div className="font-semibold mb-2 text-muted-foreground">BEFORE:</div>
-                <pre>{selectedLog.before_json ? JSON.stringify(JSON.parse(selectedLog.before_json), null, 2) : 'null'}</pre>
-              </div>
-              <div className="flex-1 bg-muted/30 p-2 rounded border font-mono text-xs overflow-auto">
-                <div className="font-semibold mb-2 text-muted-foreground">AFTER:</div>
-                <pre>{selectedLog.after_json ? JSON.stringify(JSON.parse(selectedLog.after_json), null, 2) : 'null'}</pre>
-              </div>
-            </div>
-            <div className="p-4 border-t flex justify-end">
-              <button 
-                onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <AuditDetailsModal log={selectedLog} onClose={() => setSelectedLog(null)} />
       )}
     </div>
   )

@@ -48,6 +48,8 @@ function normalizeDate(dateStr: string | null | undefined): string | null {
 // ── Zod Schemas for Validation ──
 const OcrItemSchema = z.object({
   productName: z.string().nullable().default(null),
+  compositionName: z.string().nullable().default(null),
+  scheduleFlag: z.enum(['H', 'H1', 'X', 'NONE']).nullable().default('NONE'),
   packText: z.string().nullable().default(null),
   batchNumber: z.string().nullable().default(null),
   expiryMonth: z.number().nullable().default(null),
@@ -69,6 +71,9 @@ const OcrExtractionSchema = z.object({
   invoiceDate: z.string().nullable().default(null),
   vendorName: z.string().nullable().default(null),
   vendorGstin: z.string().nullable().default(null),
+  vendorPhone: z.string().nullable().default(null),
+  vendorEmail: z.string().nullable().default(null),
+  vendorAddress: z.string().nullable().default(null),
   totalAmount: z.number().nullable().default(0),
   grandTotalRupees: z.number().nullable().default(null),
   totalSgstRupees: z.number().nullable().default(null),
@@ -124,10 +129,13 @@ export async function extractInvoiceData(
     You are an expert OCR assistant for an Indian retail pharmacy wholesaler invoice.
     Extract every field into the exact JSON schema provided.
 
-    VENDOR IDENTIFICATION (CRITICAL):
+    VENDOR IDENTIFICATION & CONTACT DETAILS (CRITICAL):
     - The vendor/seller is the company in the HEADER (top of page). 
     - Examples from training data: "UNICARE", "JAIN MEDICAL & SURGICAL", "SHREE RAM AGENCIES".
     - The "M/s" or "To:" line (e.g., "SHIV SHAKTI MEDICAL STORES") is the BUYER. NEVER extract the buyer as vendorName.
+    - Extract vendor Phone Number into vendorPhone (e.g., "9826123456" or "0788-223456").
+    - Extract vendor Email into vendorEmail if present.
+    - Extract vendor Physical Address into vendorAddress if printed in header.
     - Format invoiceDate strictly as YYYY-MM-DD (e.g., 2023-10-24).
 
     PACKING & QUANTITIES (CRITICAL FOR INVENTORY MATH):
@@ -147,9 +155,11 @@ export async function extractInvoiceData(
     - "totalAmount" MUST be the final Grand Total of the invoice (e.g., "GRAND TOTAL", "NET AMT."). Do not miss this.
     - Extract numbers exactly as printed (e.g., 89.06). Do not round.
 
-    PRODUCT NAMES (IGNORE DISTRIBUTOR SHORT-CODES):
+    PRODUCT NAMES, COMPOSITION & SCHEDULE INFERENCE:
     - DISTRIBUTOR CODES: Often, there is a column (labeled "Com.", "Class", or "CND") containing short uppercase codes (like "LEEFO", "8697") placed right next to the Item Name. DO NOT include these codes in the productName.
     - Extract productName from ONLY the actual Item Name/Particulars/Product column.
+    - COMPOSITION INFERENCE: Using your internal pharmaceutical knowledge, infer the active salt composition and strength for the product name (e.g., "ALCINAC-RB" -> "Aceclofenac 100mg + Rabeprazole 20mg", "AUGMENTIN 625" -> "Amoxicillin 500mg + Clavulanic Acid 125mg"). Set compositionName.
+    - SCHEDULE INFERENCE: Infer the Indian Drug Schedule flag for this product ("H", "H1", "X", or "NONE"). Set scheduleFlag.
 
     CONFIDENCE SCORE (0.0 to 1.0):
     - Assess your certainty for each row. If the image is blurry, folded, or a batch number is ambiguous (like guessing between a 5 or an S), score it below 0.7. Do not default to 1.0 unless perfectly legible.
@@ -191,6 +201,9 @@ export async function extractInvoiceData(
               invoiceDate: { type: Type.STRING, nullable: true },
               vendorName: { type: Type.STRING, nullable: true },
               vendorGstin: { type: Type.STRING, nullable: true },
+              vendorPhone: { type: Type.STRING, nullable: true },
+              vendorEmail: { type: Type.STRING, nullable: true },
+              vendorAddress: { type: Type.STRING, nullable: true },
               grandTotalRupees: { type: Type.NUMBER, nullable: true },
               totalSgstRupees: { type: Type.NUMBER, nullable: true },
               totalCgstRupees: { type: Type.NUMBER, nullable: true },
@@ -200,6 +213,8 @@ export async function extractInvoiceData(
                   type: Type.OBJECT,
                   properties: {
                     productName: { type: Type.STRING, nullable: true },
+                    compositionName: { type: Type.STRING, nullable: true },
+                    scheduleFlag: { type: Type.STRING, enum: ["H", "H1", "X", "NONE"], nullable: true },
                     packText: { type: Type.STRING, nullable: true },
                     batchNumber: { type: Type.STRING, nullable: true },
                     expiryMonth: { type: Type.INTEGER, nullable: true },
@@ -269,6 +284,8 @@ export async function extractInvoiceData(
 
       return {
         productName: item.productName,
+        compositionName: item.compositionName || null,
+        scheduleFlag: item.scheduleFlag || 'NONE',
         batchNumber: item.batchNumber,
         packText: item.packText,
         expiryMonth: item.expiryMonth,
@@ -292,6 +309,9 @@ export async function extractInvoiceData(
       invoiceDate: normalizeDate(validatedData.invoiceDate),
       vendorName: validatedData.vendorName,
       vendorGstin: validatedData.vendorGstin,
+      vendorPhone: validatedData.vendorPhone || null,
+      vendorEmail: validatedData.vendorEmail || null,
+      vendorAddress: validatedData.vendorAddress || null,
       totalAmount: validatedData.totalAmount || validatedData.grandTotalRupees || 0,
       grandTotalRupees: validatedData.grandTotalRupees,
       totalSgstRupees: validatedData.totalSgstRupees,

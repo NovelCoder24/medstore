@@ -45,3 +45,23 @@ export function useUpdateVendor() {
     }
   })
 }
+
+export function useVendorLedger(vendorId: number) {
+  return useQuery({
+    queryKey: ['vendorLedger', vendorId],
+    queryFn: async () => {
+      return await window.api.invoke(IPC_CHANNELS.VENDORS_GET_LEDGER, vendorId)
+    },
+    enabled: !!vendorId
+  })
+}
+
+export function useVendorPayments(vendorId: number) {
+  return useQuery({
+    queryKey: ['vendorPayments', vendorId],
+    queryFn: async () => {
+      return await window.api.invoke(IPC_CHANNELS.VENDORS_GET_PAYMENTS, vendorId)
+    },
+    enabled: !!vendorId
+  })
+}

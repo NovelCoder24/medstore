@@ -12,6 +12,8 @@
 
 export interface OcrExtractedItem {
   productName: string | null
+  compositionName: string | null
+  scheduleFlag: 'H' | 'H1' | 'X' | 'NONE' | null
   packText: string | null
   batchNumber: string | null
   expiryMonth: number | null
@@ -34,6 +36,9 @@ export interface OcrExtractionResult {
   invoiceDate: string | null
   vendorName: string | null
   vendorGstin: string | null
+  vendorPhone: string | null
+  vendorEmail: string | null
+  vendorAddress: string | null
   totalAmount: number    // rupees (float) - legacy / fallback
   grandTotalRupees: number | null
   totalSgstRupees: number | null

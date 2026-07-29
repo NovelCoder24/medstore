@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useProducts, useProductBatches } from '../../hooks/useProducts'
+import { useVendors } from '../../hooks/useVendors'
 import { useAuthStore } from '../../store/auth.store'
 import { useQueryClient } from '@tanstack/react-query'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
@@ -37,8 +38,16 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
   batch: any
   packSize: number
   onClose: () => void
-  onSave: (data: { mrp_paise?: number; purchase_rate_paise?: number; quantity?: number; gst_rate_pct?: number }, reason: string) => void
+  onSave: (data: { batch_number?: string; expiry_date?: string; vendor_id?: number | null; mrp_paise?: number; purchase_rate_paise?: number; quantity?: number; gst_rate_pct?: number }, reason: string) => void
 }) {
+  const { data: vendors } = useVendors()
+  const [batchNumber, setBatchNumber] = useState(batch.batch_number || '')
+  
+  // Format expiry date for month input YYYY-MM
+  const initialExpiryMonth = batch.expiry_date ? String(batch.expiry_date).slice(0, 7) : ''
+  const [expiryDate, setExpiryDate] = useState(initialExpiryMonth)
+  
+  const [vendorId, setVendorId] = useState(batch.vendor_id ? String(batch.vendor_id) : '')
   const [mrp, setMrp] = useState((batch.mrp_paise / 100).toFixed(2))
   const [ptr, setPtr] = useState((batch.purchase_rate_paise / 100).toFixed(2))
   const [qty, setQty] = useState(String(batch.quantity))
@@ -51,7 +60,20 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
       alert('Please provide a reason for this change (required for audit trail).')
       return
     }
+
+    let fullExpiryDate = batch.expiry_date
+    if (expiryDate) {
+      const parts = expiryDate.split('-').map(Number)
+      if (parts.length === 2 && parts[0] && parts[1]) {
+        const lastDay = new Date(parts[0], parts[1], 0).getDate()
+        fullExpiryDate = `${parts[0]}-${String(parts[1]).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      }
+    }
+
     onSave({
+      batch_number: batchNumber.trim().toUpperCase(),
+      expiry_date: fullExpiryDate,
+      vendor_id: vendorId ? parseInt(vendorId, 10) : null,
       mrp_paise: Math.round(parseFloat(mrp) * 100),
       purchase_rate_paise: Math.round(parseFloat(ptr) * 100),
       quantity: parseInt(qty, 10),
@@ -68,6 +90,26 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Batch Number</label>
+              <input type="text" value={batchNumber} onChange={e => setBatchNumber(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background uppercase focus:ring-2 focus:ring-primary/50 focus:outline-none" required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Expiry Date</label>
+              <input type="month" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:ring-2 focus:ring-primary/50 focus:outline-none" required />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Vendor / Supplier</label>
+              <select value={vendorId} onChange={e => setVendorId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:ring-2 focus:ring-primary/50 focus:outline-none">
+                <option value="">(None / Direct Entry)</option>
+                {vendors?.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">MRP (₹)</label>
               <input type="number" step="0.01" value={mrp} onChange={e => setMrp(e.target.value)}
@@ -99,8 +141,8 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Reason for change <span className="text-red-500">*</span></label>
             <input type="text" value={reason} onChange={e => setReason(e.target.value)}
-              placeholder="e.g. MRP label corrected, physical stock count mismatch..."
-              className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:ring-2 focus:ring-primary/50 focus:outline-none" />
+              placeholder="e.g. Batch typo corrected, physical stock count update..."
+              className="w-full px-3 py-2 text-sm border rounded-md bg-background focus:ring-2 focus:ring-primary/50 focus:outline-none" required />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose}
@@ -236,7 +278,7 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
 }
 
 // ── Product row with accordion batches ──
-function ProductRow({ product }: { product: Product }) {
+function ProductRow({ product, onEditProduct }: { product: Product; onEditProduct: (product: Product) => void }) {
   const [isExpanded, setIsExpanded] = useState(false)
   const { data: batches, isLoading: isLoadingBatches, refetch } = useProductBatches(isExpanded ? product.id : 0)
 
@@ -262,9 +304,14 @@ function ProductRow({ product }: { product: Product }) {
         <td className="px-4 py-3 font-medium">
           <div className="flex items-center gap-2">
             {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-            <span>
-              {product.brand_name} {product.pack_size > 1 ? `(${product.pack_size}'s)` : ''}
-            </span>
+            <div>
+              <span>
+                {product.brand_name} {product.pack_size > 1 ? `(${product.pack_size}'s)` : ''}
+              </span>
+              {product.generic_name && (
+                <p className="text-xs text-muted-foreground truncate max-w-xs">{product.generic_name}</p>
+              )}
+            </div>
           </div>
         </td>
         <td className="px-4 py-3 text-muted-foreground">
@@ -277,23 +324,37 @@ function ProductRow({ product }: { product: Product }) {
           {mrpDisplay}
         </td>
         <td className="px-4 py-3 text-right">
-          <div className="flex flex-col items-end gap-0.5">
-            <div className="flex items-center gap-2">
-              {hasNearExpiry && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-red-700 bg-red-100 rounded-full" title="Expiring within 30 days">
-                  <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                  Near Expiry
+          <div className="flex items-center justify-end gap-3">
+            <div className="flex flex-col items-end gap-0.5">
+              <div className="flex items-center gap-2">
+                {hasNearExpiry && (
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-red-700 bg-red-100 rounded-full" title="Expiring within 30 days">
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    Near Expiry
+                  </span>
+                )}
+                <span className={isOutOfStock ? 'text-red-500 font-semibold' : 'font-medium'}>
+                  {formatStock(product.total_stock_units || 0, product.pack_size)}
+                </span>
+              </div>
+              {!isOutOfStock && product.pack_size > 1 && (
+                <span className="text-[10px] text-muted-foreground">
+                  ({product.total_stock_units} units)
                 </span>
               )}
-              <span className={isOutOfStock ? 'text-red-500 font-semibold' : 'font-medium'}>
-                {formatStock(product.total_stock_units || 0, product.pack_size)}
-              </span>
             </div>
-            {!isOutOfStock && product.pack_size > 1 && (
-              <span className="text-[10px] text-muted-foreground">
-                ({product.total_stock_units} units)
-              </span>
-            )}
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEditProduct(product)
+              }}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+              title="Edit Product Details (Name, Salt Composition, Schedule, Rack)"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
           </div>
         </td>
       </tr>
@@ -381,10 +442,13 @@ function ProductRow({ product }: { product: Product }) {
 }
 
 export function ProductList() {
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isProductFormOpen, setIsProductFormOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   const [filters, setFilters] = useState({
     hideOutOfStock: false,
@@ -394,17 +458,31 @@ export function ProductList() {
     expiringSoon: false
   })
   
+  // Invalidate cache whenever Inventory tab is mounted to get latest stock levels
+  React.useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['products'] })
+    queryClient.invalidateQueries({ queryKey: ['productBatches'] })
+  }, [queryClient])
+
   // Debounce search query
   React.useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300)
     return () => clearTimeout(timer)
   }, [query])
 
-  const { data, isLoading, error } = useProducts({ 
+  const { data, isLoading, error, refetch } = useProducts({ 
     query: debouncedQuery, 
     page: 1,
     ...filters 
   })
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true)
+    await queryClient.invalidateQueries({ queryKey: ['products'] })
+    await queryClient.invalidateQueries({ queryKey: ['productBatches'] })
+    await refetch()
+    setTimeout(() => setIsRefreshing(false), 500)
+  }
 
   const toggleFilter = (key: keyof typeof filters) => {
     setFilters(prev => {
@@ -431,6 +509,15 @@ export function ProductList() {
         <h2 className="text-2xl font-bold tracking-tight">Inventory</h2>
         <div className="flex items-center gap-2">
           <button 
+            onClick={handleManualRefresh}
+            disabled={isRefreshing || isLoading}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-muted/80 transition-colors disabled:opacity-50"
+            title="Refresh inventory stock counts"
+          >
+            <RotateCcw className={`w-4 h-4 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button 
             onClick={() => setIsImportOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-muted/80 transition-colors"
           >
@@ -448,7 +535,14 @@ export function ProductList() {
       </div>
 
       <ImportCsvModal isOpen={isImportOpen} onOpenChange={setIsImportOpen} />
-      <ProductFormModal isOpen={isProductFormOpen} onClose={() => setIsProductFormOpen(false)} />
+      <ProductFormModal 
+        isOpen={isProductFormOpen || !!editingProduct} 
+        product={editingProduct || undefined}
+        onClose={() => {
+          setIsProductFormOpen(false)
+          setEditingProduct(null)
+        }} 
+      />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 px-3 py-2 bg-card border rounded-md shadow-sm">
@@ -509,7 +603,7 @@ export function ProductList() {
             </thead>
             <tbody className="divide-y">
               {data?.data.map((product) => (
-                <ProductRow key={product.id} product={product} />
+                <ProductRow key={product.id} product={product} onEditProduct={setEditingProduct} />
               ))}
               {data?.data.length === 0 && (
                 <tr>

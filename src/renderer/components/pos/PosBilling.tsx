@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ProductSearchDropdown } from './ProductSearchDropdown'
 import { CartTable } from './CartTable'
 import { CheckoutModal } from './CheckoutModal'
@@ -14,6 +14,20 @@ export function PosBilling() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
   const totals = getTotals()
+
+  // F12 Hotkey to open checkout directly
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'F12') {
+        e.preventDefault()
+        if (items.length > 0) {
+          setIsCheckoutOpen(true)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [items.length])
 
   const handleProductSelect = async (product: any) => {
     setErrorMsg(null)

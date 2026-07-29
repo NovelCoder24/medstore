@@ -26,11 +26,13 @@ function createWindow(): void {
     height: 768,
     show: false,
     autoHideMenuBar: true,
+    icon: join(__dirname, '../../icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      devTools: is.dev
     }
   })
 
@@ -58,7 +60,7 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.medstore.pos')
+  electronApp.setAppUserModelId('com.medstore')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

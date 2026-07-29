@@ -11,6 +11,7 @@ import { PurchaseForm } from './components/purchases/PurchaseForm'
 import { Dashboard } from './components/dashboard/Dashboard'
 import { CustomerList } from './components/customers/CustomerList'
 import { SalesHistory } from './components/sales/SalesHistory'
+import { ScheduleRegister } from './components/reports/ScheduleRegister'
 import { Loader2 } from 'lucide-react'
 
 import { SettingsForm } from './components/settings/SettingsForm'
@@ -59,6 +60,7 @@ export function App() {
       {activeTab === 'Suppliers' && <VendorList />}
       {activeTab === 'Customers' && <CustomerList />}
       {activeTab === 'Sales History' && <SalesHistory />}
+      {activeTab === 'Drug Register' && <ScheduleRegister />}
       {activeTab === 'Dashboard' && <Dashboard />}
       {activeTab === 'Staff' && <StaffList />}
       {activeTab === 'Audit Trail' && <AuditLogs />}

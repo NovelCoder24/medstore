@@ -1,5 +1,5 @@
 {
-  "name": "medstore-pos",
+  "name": "medstore",
   "version": "1.0.0",
   "description": "Offline-first pharmacy POS and inventory management system",
   "main": "./out/main/index.js",
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit/",
-    "test:db": "vitest run tests/db/"
+    "test:db": "vitest run tests/db/",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^1.0.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",

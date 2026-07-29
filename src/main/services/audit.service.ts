@@ -8,7 +8,8 @@ export interface AuditLogPayload {
   overrideByUserId?: number
   action: string
   entityType: string
-  entityId?: number
+  entityId: number | null
+  entityName: string
   beforeJson?: any
   afterJson?: any
   reason?: string
@@ -31,10 +32,11 @@ export function logAuditAction(payload: AuditLogPayload, dbContext?: Database.Da
       action, 
       entity_type, 
       entity_id, 
+      entity_name,
       before_json, 
       after_json, 
       reason
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   insert.run(
@@ -43,18 +45,34 @@ export function logAuditAction(payload: AuditLogPayload, dbContext?: Database.Da
     payload.action,
     payload.entityType,
     payload.entityId || null,
+    payload.entityName,
     payload.beforeJson ? JSON.stringify(payload.beforeJson) : null,
     payload.afterJson ? JSON.stringify(payload.afterJson) : null,
-    payload.reason || null
+    payload.reason || 'No reason provided'
   )
 }
 
-export function getAuditLogs(page: number = 1, pageSize: number = 50) {
+export function getAuditLogs(page: number = 1, pageSize: number = 50, filters?: { action?: string, startDate?: string, endDate?: string }) {
   const db = getDatabase()
   const offset = (page - 1) * pageSize
 
-  const totalRow = db.prepare('SELECT count(*) as total FROM audit_logs').get() as { total: number }
+  let whereClause = '1=1'
+  const params: any[] = []
+
+  if (filters?.action && filters.action !== 'ALL') {
+    whereClause += ' AND a.action = ?'
+    params.push(filters.action)
+  }
+
+  if (filters?.startDate && filters?.endDate) {
+    whereClause += ' AND a.created_at >= ? AND a.created_at <= ?'
+    params.push(filters.startDate, filters.endDate + 'T23:59:59')
+  }
+
+  const totalRow = db.prepare(`SELECT count(*) as total FROM audit_logs a WHERE ${whereClause}`).get(...params) as { total: number }
   
+  params.push(pageSize, offset)
+
   const data = db.prepare(`
     SELECT 
       a.*, 
@@ -63,9 +81,10 @@ export function getAuditLogs(page: number = 1, pageSize: number = 50) {
     FROM audit_logs a
     JOIN users u1 ON a.actor_user_id = u1.id
     LEFT JOIN users u2 ON a.override_by_user_id = u2.id
+    WHERE ${whereClause}
     ORDER BY a.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(pageSize, offset)
+  `).all(...params)
 
   return {
     data,
@@ -76,7 +95,7 @@ export function getAuditLogs(page: number = 1, pageSize: number = 50) {
 }
 
 export function registerAuditHandlers() {
-  ipcMain.handle(IPC_CHANNELS.AUDIT_LOG_LIST, (_, { page, pageSize }) => {
-    return getAuditLogs(page, pageSize)
+  ipcMain.handle(IPC_CHANNELS.AUDIT_LOG_LIST, (_, { page, pageSize, filters }) => {
+    return getAuditLogs(page, pageSize, filters)
   })
 }

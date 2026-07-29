@@ -68,24 +68,44 @@ export function PurchaseForm() {
       const result: OcrExtractionResult = await window.api.invoke(IPC_CHANNELS.OCR_EXTRACT, { buffer: arrayBuffer, mimeType })
 
       // Try to auto-match vendor by GSTIN first, then by name
-      let matchedVendorId = vendorId
+      let matchedVendor: any = null
       if (vendors) {
         if (result.vendorGstin) {
-          const match = vendors.find(v => v.gstin?.toUpperCase() === result.vendorGstin!.toUpperCase())
-          if (match) matchedVendorId = match.id
+          matchedVendor = vendors.find(v => v.gstin?.toUpperCase() === result.vendorGstin!.toUpperCase()) || null
         }
 
-        if (!matchedVendorId && result.vendorName) {
-          const match = vendors.find(v => v.name.toLowerCase().includes(result.vendorName!.toLowerCase()))
-          if (match) matchedVendorId = match.id
+        if (!matchedVendor && result.vendorName) {
+          matchedVendor = vendors.find(v => v.name.toLowerCase().includes(result.vendorName!.toLowerCase())) || null
         }
       }
 
-      if (!matchedVendorId && result.vendorName) {
+      let matchedVendorId = matchedVendor?.id || vendorId
+
+      if (matchedVendor) {
+        // Existing vendor found: Only fill in fields that are CURRENTLY MISSING in DB (do NOT overwrite existing master details)
+        const updatesToApply: Record<string, string> = {}
+        if (!matchedVendor.contact_phone && result.vendorPhone) updatesToApply.contact_phone = result.vendorPhone
+        if (!matchedVendor.contact_email && result.vendorEmail) updatesToApply.contact_email = result.vendorEmail
+        if (!matchedVendor.address && result.vendorAddress) updatesToApply.address = result.vendorAddress
+        if (!matchedVendor.gstin && result.vendorGstin) updatesToApply.gstin = result.vendorGstin
+
+        if (Object.keys(updatesToApply).length > 0) {
+          try {
+            await window.api.invoke(IPC_CHANNELS.VENDORS_UPDATE, { id: matchedVendor.id, data: updatesToApply })
+            await queryClient.invalidateQueries({ queryKey: ['vendors'] })
+          } catch (e) {
+            console.error("Failed to sync missing vendor fields from OCR:", e)
+          }
+        }
+      } else if (result.vendorName) {
+        // Vendor does NOT exist: Create new vendor with extracted contact details
         try {
           const newVendor = await window.api.invoke(IPC_CHANNELS.VENDORS_CREATE, {
             name: result.vendorName,
-            gstin: result.vendorGstin || null
+            gstin: result.vendorGstin || null,
+            contact_phone: result.vendorPhone || null,
+            contact_email: result.vendorEmail || null,
+            address: result.vendorAddress || null
           })
           matchedVendorId = newVendor.id
           await queryClient.invalidateQueries({ queryKey: ['vendors'] })
@@ -125,6 +145,8 @@ export function PurchaseForm() {
           productToUse = {
             id: null,
             brand_name: item.productName || '(unrecognized product)',
+            generic_name: item.compositionName || '',
+            schedule_flag: item.scheduleFlag || 'NONE',
             pack_size: dbPackSize,
             gst_rate_pct: item.gstRatePct || 0
           }
@@ -196,12 +218,12 @@ export function PurchaseForm() {
         if (item.needsProductLink || !item.productId) {
           const newProduct = await window.api.invoke(IPC_CHANNELS.PRODUCTS_CREATE, {
             brand_name: item.ocrProductNameRaw || item.brandName,
-            generic_name: '',
+            generic_name: (item as any).compositionName || (item as any).generic_name || '',
             category: 'GENERIC', // Default fallback that respects DB CHECK constraint
             pack_size: item.packSize || (item as any).pack_size || 1, // <--- Correctly uses the parsed size
             gst_rate_pct: item.gstRatePct || 0,
             hsn_code: item.hsnCode || null,
-            schedule_flag: 'NONE'
+            schedule_flag: (item as any).scheduleFlag || (item as any).schedule_flag || 'NONE'
           })
           
           // Invalidate products query in background so other lists update
@@ -247,6 +269,11 @@ export function PurchaseForm() {
       }
 
       await window.api.invoke(IPC_CHANNELS.PURCHASES_CREATE, payload)
+
+      // Invalidate queries so inventory lists update immediately
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['productBatches'] })
+      queryClient.invalidateQueries({ queryKey: ['vendors'] })
 
       setSuccess(true)
       setTimeout(() => {

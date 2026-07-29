@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { Settings, KeyRound, Loader2, Save, CheckCircle2, FileSpreadsheet, Download } from 'lucide-react'
 import { BackupSettings } from './BackupSettings'
+import { StoreHeaderSettingsCard } from './StoreHeaderSettingsCard'
 
 export function SettingsForm() {
   const [apiKey, setApiKey] = useState('')
@@ -120,6 +121,11 @@ export function SettingsForm() {
           </div>
         </section>
         
+        {/* Store Header & Bill Format Settings Section */}
+        <section className="pb-12 border-b border-muted/60">
+          <StoreHeaderSettingsCard />
+        </section>
+
         {/* Backup Settings Section */}
         <section className="pb-12 border-b border-muted/60">
           <BackupSettings />

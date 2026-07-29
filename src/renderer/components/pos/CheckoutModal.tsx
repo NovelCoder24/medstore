@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as Dialog from '@radix-ui/react-dialog'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { useCartStore } from '../../store/cart.store'
@@ -13,6 +14,7 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
+  const queryClient = useQueryClient()
   const { items, patient, getTotals, clearCart, updatePatient } = useCartStore()
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
@@ -97,6 +99,11 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
       // Record the sale
       const result = await window.api.invoke(IPC_CHANNELS.SALES_CREATE, payload)
       const { id, billNumber: generatedBillNumber } = result
+
+      // Invalidate products and batch queries so inventory lists reflect stock changes immediately
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['productBatches'] })
+
       setSaleId(id)
       setBillNumber(generatedBillNumber)
       setSuccess(true)

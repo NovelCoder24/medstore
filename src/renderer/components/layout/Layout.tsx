@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuthStore } from '../../store/auth.store'
-import { LogOut, LayoutDashboard, ShoppingCart, PackageSearch, Users, Settings, ShoppingBag, FileDown, ShieldCheck } from 'lucide-react'
+import { LogOut, LayoutDashboard, ShoppingCart, PackageSearch, Users, Settings, ShoppingBag, FileDown, ShieldCheck, ClipboardList } from 'lucide-react'
+import { ErrorBoundary } from './ErrorBoundary'
 
 const navItems = [
   { icon: ShoppingCart, label: 'POS Billing', role: 'CASHIER' },
@@ -10,6 +11,7 @@ const navItems = [
   { icon: Users, label: 'Suppliers', role: 'OWNER' },
   { icon: LayoutDashboard, label: 'Dashboard', role: 'OWNER' },
   { icon: ShoppingBag, label: 'Sales History', role: 'OWNER' },
+  { icon: ClipboardList, label: 'Drug Register', role: 'OWNER' },
   { icon: Users, label: 'Staff', role: 'OWNER' },
   { icon: ShieldCheck, label: 'Audit Trail', role: 'OWNER' },
   { icon: Settings, label: 'Settings', role: 'OWNER' },
@@ -73,7 +75,9 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto bg-muted/20 p-6">
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </main>
     </div>
   )

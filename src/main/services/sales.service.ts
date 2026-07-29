@@ -2,6 +2,7 @@ import { getDatabase } from './db.service'
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { APP_DEFAULTS } from '../../shared/constants'
+import { calculateItemGst, aggregateGst, GstBreakdown } from '../../shared/utils/gst'
 
 export interface SalePayload {
   userId: number
@@ -9,7 +10,7 @@ export interface SalePayload {
   patientPhone: string | null
   doctorName: string | null
   doctorRegNo: string | null
-  paymentMode: 'CASH' | 'UPI' | 'CARD'
+  paymentMode: 'CASH' | 'UPI' | 'CARD' | 'CREDIT'
 
   subtotalPaise: number
   totalDiscountPaise: number
@@ -20,6 +21,7 @@ export interface SalePayload {
 
   customerId?: number
   ownerPin?: string
+  isInterState?: boolean
 
   items: SaleItemPayload[]
 }
@@ -42,6 +44,7 @@ import { getCustomer } from './customer.service'
 
 /**
  * Creates a new sale, deducts inventory, and records ledger movements.
+ * Recalculates and verifies all financial and GST amounts on the server to prevent payload tampering.
  * This function executes entirely within a single SQLite transaction to guarantee atomicity.
  */
 export async function createSale(payload: SalePayload): Promise<{ id: number; billNumber: string }> {
@@ -58,13 +61,18 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
     }
   }
 
-
   // Generate a unique bill number: MED-YYYYMMDD-NNNN
   const billNumber = (() => {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM sales WHERE bill_number LIKE ?`).get(`MED-${today}%`) as { cnt: number }
     return `MED-${today}-${String(countRow.cnt + 1).padStart(4, '0')}`
   })()
+
+  // Statements for processing checkout
+  const getBatchInfo = db.prepare(`
+    SELECT b.product_id, b.gst_rate_pct, b.mrp_paise, b.purchase_rate_paise
+    FROM batches b WHERE b.id = ?
+  `)
 
   const insertSale = db.prepare(`
     INSERT INTO sales (
@@ -85,19 +93,55 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
   `)
 
   const insertLedger = db.prepare(`
-  INSERT INTO stock_ledger (
-    batch_id,
-    movement_type,
-    quantity_delta,
-    actor_user_id,
-    reason,
-    reference_entity
-  ) VALUES (?, 'SALE_OUT', ?, ?, ?, ?)
-`)
+    INSERT INTO stock_ledger (
+      batch_id,
+      movement_type,
+      quantity_delta,
+      actor_user_id,
+      reason,
+      reference_entity
+    ) VALUES (?, 'SALE_OUT', ?, ?, ?, ?)
+  `)
+
+  // Pre-validate & calculate all items on server
+  const computedItems: Array<{
+    payloadItem: SaleItemPayload
+    breakdown: GstBreakdown
+  }> = []
+
+  const isInterState = !!payload.isInterState
+
+  for (const item of payload.items) {
+    if (item.quantityUnits <= 0) {
+      throw new Error(`Invalid item quantity ${item.quantityUnits} for product ${item.productId}`)
+    }
+    const batch = getBatchInfo.get(item.batchId) as { product_id: number; gst_rate_pct: number; mrp_paise: number } | undefined
+    if (!batch) {
+      throw new Error(`Batch ID ${item.batchId} not found`)
+    }
+
+    const gstRatePct = batch.gst_rate_pct ?? 0
+    const breakdown = calculateItemGst(
+      item.salePricePaise,
+      item.discountPaise,
+      item.quantityUnits,
+      gstRatePct,
+      isInterState
+    )
+
+    computedItems.push({ payloadItem: item, breakdown })
+  }
+
+  const aggregateTotals = aggregateGst(computedItems.map(c => c.breakdown))
+
+  // Allow max 1 paise rounding tolerance between client & server calculations
+  if (Math.abs(aggregateTotals.lineTotalPaise - payload.grandTotalPaise) > 1) {
+    throw new Error(`PAYLOAD_TOTAL_MISMATCH: Server calculated ${aggregateTotals.lineTotalPaise} paise, but payload supplied ${payload.grandTotalPaise} paise`)
+  }
 
   // Wrap everything in a transaction
   const executeCheckout = db.transaction(() => {
-    // 1. Create the Sale record
+    // 1. Create the Sale record using server-verified financial totals
     const saleResult = insertSale.run(
       billNumber,
       payload.userId,
@@ -106,12 +150,12 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
       payload.patientPhone || null,
       payload.doctorName || null,
       payload.doctorRegNo || null,
-      payload.subtotalPaise,
+      aggregateTotals.taxableValuePaise,
       payload.totalDiscountPaise,
-      payload.cgstPaise,
-      payload.sgstPaise,
-      payload.igstPaise,
-      payload.grandTotalPaise,
+      aggregateTotals.cgstPaise,
+      aggregateTotals.sgstPaise,
+      aggregateTotals.igstPaise,
+      aggregateTotals.lineTotalPaise,
       payload.customerId || null
     )
 
@@ -121,37 +165,42 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
       db.prepare(`
         INSERT INTO customer_ledger (customer_id, transaction_type, amount_paise, reference_id)
         VALUES (?, 'CREDIT_SALE', ?, ?)
-      `).run(payload.customerId, payload.grandTotalPaise, billNumber)
+      `).run(payload.customerId, aggregateTotals.lineTotalPaise, billNumber)
 
       db.prepare(`
         UPDATE customers 
         SET current_balance_paise = current_balance_paise + ?
         WHERE id = ?
-      `).run(payload.grandTotalPaise, payload.customerId)
+      `).run(aggregateTotals.lineTotalPaise, payload.customerId)
     }
 
     // 2. Process each line item
-    for (const item of payload.items) {
+    for (const { payloadItem, breakdown } of computedItems) {
       // Deduct stock (ensure atomic check to prevent negative inventory)
-      const deductResult = deductBatch.run(item.quantityUnits, item.batchId, item.quantityUnits)
+      const deductResult = deductBatch.run(payloadItem.quantityUnits, payloadItem.batchId, payloadItem.quantityUnits)
       if (deductResult.changes === 0) {
-        throw new Error(`Insufficient stock for Product ID ${item.productId}, Batch ID ${item.batchId}`)
+        throw new Error(`Insufficient stock for Product ID ${payloadItem.productId}, Batch ID ${payloadItem.batchId}`)
       }
 
-      // Record Sale Item
-      // taxable_value = (unit_price * qty) - (discount * qty) per Indian GST law
-      const taxableValuePaise = (item.salePricePaise * item.quantityUnits) - (item.discountPaise * item.quantityUnits)
+      // Record Sale Item with GST-inclusive reverse-calculated taxable value
       insertSaleItem.run(
-        saleId, item.productId, item.batchId, item.quantityUnits,
-        taxableValuePaise, item.salePricePaise, item.discountPaise,
-        item.cgstPaise, item.sgstPaise, item.igstPaise, item.lineTotalPaise
+        saleId,
+        payloadItem.productId,
+        payloadItem.batchId,
+        payloadItem.quantityUnits,
+        breakdown.taxableValuePaise,
+        payloadItem.salePricePaise,
+        payloadItem.discountPaise,
+        breakdown.cgstPaise,
+        breakdown.sgstPaise,
+        breakdown.igstPaise,
+        breakdown.lineTotalPaise
       )
 
       // Record Ledger Movement (quantity is negative for a sale)
-      // Columns: batch_id, quantity_delta, actor_user_id, reason, reference_entity
       insertLedger.run(
-        item.batchId,
-        -item.quantityUnits,
+        payloadItem.batchId,
+        -payloadItem.quantityUnits,
         payload.userId,
         null,
         `SALE-${saleId}`
@@ -276,9 +325,18 @@ export function processSalesReturn(saleId: number, userId: number, reason: strin
       }
 
       // Calculate refund exactly based on what was paid for this item
-      // The customer paid 'total_paise' for the whole quantity of this line item
-      const unitRefundPaise = Math.floor(saleItem.total_paise / saleItem.quantity)
-      const lineRefundPaise = unitRefundPaise * reqItem.quantity
+      // Get previously refunded amount for this sale item to ensure no paise leakage
+      const previouslyRefundedRow = db.prepare(`SELECT COALESCE(SUM(refund_paise), 0) as amount FROM sales_return_items WHERE original_sale_item_id = ?`).get(reqItem.saleItemId) as { amount: number }
+      
+      let lineRefundPaise: number
+      if (reqItem.quantity === remainingAllowed) {
+        // If returning all remaining items, refund the exact remaining balance of the line item total
+        lineRefundPaise = saleItem.total_paise - previouslyRefundedRow.amount
+      } else {
+        // Pro-rate based on quantity and round to nearest paise
+        lineRefundPaise = Math.round((saleItem.total_paise * reqItem.quantity) / saleItem.quantity)
+      }
+
       totalRefundPaise += lineRefundPaise
 
       insertReturnItem.run(returnId, reqItem.saleItemId, saleItem.batch_id, reqItem.quantity, lineRefundPaise)
@@ -345,13 +403,12 @@ export function listSales(limit = 100): any[] {
   })
 }
 
-// ── IPC Handlers ──
-
-// ── IPC Handlers ──
+import { SalePayloadSchema } from '../../shared/schemas'
 
 export function registerSalesHandlers() {
   ipcMain.handle(IPC_CHANNELS.SALES_CREATE, async (_, payload: SalePayload) => {
-    return await createSale(payload)
+    const validatedPayload = SalePayloadSchema.parse(payload)
+    return await createSale(validatedPayload as SalePayload)
   })
 
   ipcMain.handle(IPC_CHANNELS.SALES_RETURN, (_, { saleId, userId, reason, items }) => {

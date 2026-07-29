@@ -29,6 +29,7 @@ export type ScheduleFlag = (typeof SCHEDULE_FLAGS)[keyof typeof SCHEDULE_FLAGS]
 
 /** Schedule flags that require doctor details on the sale */
 export const DOCTOR_REQUIRED_SCHEDULES: readonly ScheduleFlag[] = [
+  SCHEDULE_FLAGS.H,
   SCHEDULE_FLAGS.H1,
   SCHEDULE_FLAGS.X
 ]

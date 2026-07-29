@@ -1,5 +1,5 @@
-appId: com.medstore.pos
-productName: MedStore POS
+appId: com.medstore
+productName: MedStore
 directories:
   buildResources: build
 files:
@@ -8,16 +8,20 @@ files:
   - '!electron.vite.config.*'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - '**/*{node,sqlite}/**'
+  - 'node_modules/better-sqlite3/**'
 win:
   target:
     - target: nsis
       arch:
-        - x64
-  executableName: MedStorePOS
+        - x64 
+  icon: icon.ico
+  executableName: MedStore
 nsis:
-  artifactName: MedStorePOS-Setup-${version}.${ext}
-  shortcutName: MedStore POS
-  uninstallDisplayName: MedStore POS ${version}
+  artifactName: MedStore-Setup-${version}.${ext}
+  shortcutName: MedStore
+  uninstallDisplayName: MedStore ${version}
   createDesktopShortcut: always
   oneClick: false
   allowToChangeInstallationDirectory: true

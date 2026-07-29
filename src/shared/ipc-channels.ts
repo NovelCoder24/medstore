@@ -42,6 +42,9 @@ export const IPC_CHANNELS = {
   VENDORS_GET: 'vendors:get',
   VENDORS_CREATE: 'vendors:create',
   VENDORS_UPDATE: 'vendors:update',
+  VENDORS_RECORD_PAYMENT: 'vendors:record-payment',
+  VENDORS_GET_LEDGER: 'vendors:get-ledger',
+  VENDORS_GET_PAYMENTS: 'vendors:get-payments',
 
   // ── CSV Import (Phase 1) ──
   IMPORT_CSV: 'import:csv',
@@ -89,6 +92,7 @@ export const IPC_CHANNELS = {
   REPORTS_EXPIRY_VALUE: 'reports:expiry-value',
   REPORTS_LOW_STOCK: 'reports:low-stock',
   REPORTS_GSTR1: 'reports:gstr1',
+  REPORTS_SCHEDULE_REGISTER: 'reports:schedule-register',
 
   // ── Supplier Returns (Phase 7) ──
   SUPPLIER_RETURNS_CREATE: 'supplier-returns:create',

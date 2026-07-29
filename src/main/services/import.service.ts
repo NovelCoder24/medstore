@@ -10,8 +10,8 @@ import { APP_DEFAULTS } from '../../shared/constants'
 // Often it's placed in `out/main/workers/import.worker.js`.
 const isProd = app.isPackaged
 const workerPath = isProd
-  ? join(process.resourcesPath, 'app.asar', 'out', 'main', 'workers', 'import.worker.js')
-  : join(__dirname, 'workers', 'import.worker.js')
+  ? join(process.resourcesPath, 'app.asar', 'out', 'main', 'import.worker.js')
+  : join(__dirname, 'import.worker.js')
 
 export function runCsvImport(csvPath: string, onProgress: (data: any) => void): Promise<any> {
   return new Promise((resolve, reject) => {

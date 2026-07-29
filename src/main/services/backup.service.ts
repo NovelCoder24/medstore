@@ -25,9 +25,9 @@ export async function createBackup(): Promise<string> {
   return new Promise((resolve, reject) => {
     // 1. Resolve path to the compiled worker file
     // In production, electron-vite puts main worker chunks alongside index.js in out/main/
-    const workerPath = app.isPackaged 
-      ? join(__dirname, 'backup.worker.js')
-      : join(__dirname, '../../out/main/backup.worker.js')
+    const workerPath = app.isPackaged
+      ? join(process.resourcesPath, 'app.asar', 'out', 'main', 'backup.worker.js')
+      : join(__dirname, 'backup.worker.js')
 
     const worker = new Worker(workerPath, {
       workerData: { dbPath: activeDbPath, backupPath }

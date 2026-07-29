@@ -98,40 +98,52 @@ function wrapWithPreviewToolbar(receiptHtml: string): string {
 <html>
 <head>
   <meta charset="utf-8">
+  <title>Print Preview</title>
   ${headContent}
   <style>
-    /* Preview toolbar — hidden during actual printing */
+    /* Hide toolbar during actual physical printer job */
     @media print {
-      .preview-toolbar { display: none !important; }
-      body { padding-top: 0 !important; }
+      .preview-toolbar-container { display: none !important; }
+      body { padding: 0 !important; background: #fff !important; overflow: visible !important; }
+      .paper-preview { box-shadow: none !important; margin: 0 !important; padding: 0 !important; border: none !important; }
     }
 
-    .preview-toolbar {
-      position: sticky;
-      top: 0;
-      z-index: 9999;
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      height: 100vh;
+      overflow: hidden !important; /* Scrollbars disabled */
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+    .preview-layout {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    .preview-toolbar-container {
+      flex-shrink: 0;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-end; /* Only two action buttons */
       gap: 12px;
-      padding: 12px 16px;
-      background: #1a1a2e;
-      border-bottom: 2px solid #16213e;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 10px 16px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
     }
 
-    .preview-toolbar .preview-label {
-      color: #a0a0b8;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-right: auto;
-    }
-
-    .preview-toolbar button {
-      padding: 8px 24px;
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 18px;
       border: none;
       border-radius: 6px;
       font-size: 13px;
@@ -140,41 +152,55 @@ function wrapWithPreviewToolbar(receiptHtml: string): string {
       transition: all 0.15s ease;
     }
 
-    .preview-toolbar .btn-print {
-      background: #4ade80;
-      color: #052e16;
-    }
-    .preview-toolbar .btn-print:hover {
-      background: #22c55e;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(74,222,128,0.4);
-    }
-    .preview-toolbar .btn-print:active { transform: translateY(0); }
-
-    .preview-toolbar .btn-cancel {
+    .btn-cancel {
       background: #334155;
       color: #cbd5e1;
     }
-    .preview-toolbar .btn-cancel:hover {
+    .btn-cancel:hover {
       background: #475569;
+      color: #ffffff;
     }
 
-    .preview-toolbar .shortcut-hint {
-      font-size: 10px;
-      color: #64748b;
-      margin-top: 2px;
+    .btn-print {
+      background: #10b981;
+      color: #ffffff;
+    }
+    .btn-print:hover {
+      background: #059669;
+    }
+
+    .paper-viewport {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      scrollbar-width: none;
+    }
+
+    .paper-preview {
+      background: #ffffff;
+      width: 80mm;
+      padding: 12px;
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
   </style>
 </head>
-<body style="margin: 0; background: #f1f5f9;">
-  <div class="preview-toolbar">
-    <span class="preview-label">🖨️ Print Preview</span>
-    <button class="btn-cancel" id="cancelBtn">Cancel</button>
-    <button class="btn-print" id="printBtn">✓ Print</button>
-  </div>
+<body>
+  <div class="preview-layout">
+    <div class="preview-toolbar-container">
+      <button class="btn-action btn-cancel" id="cancelBtn">Cancel</button>
+      <button class="btn-action btn-print" id="printBtn">✓ Print</button>
+    </div>
 
-  <div style="background: #fff; max-width: 80mm; margin: 16px auto; padding: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); border-radius: 4px;">
-    ${bodyContent}
+    <div class="paper-viewport">
+      <div class="paper-preview">
+        ${bodyContent}
+      </div>
+    </div>
   </div>
 
   <script>
@@ -187,7 +213,6 @@ function wrapWithPreviewToolbar(receiptHtml: string): string {
       console.log('__PREVIEW_CANCEL__');
     });
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -205,7 +230,7 @@ function wrapWithPreviewToolbar(receiptHtml: string): string {
 /**
  * Generates an A4 PDF from HTML content (useful for reports / A4 invoices).
  */
-export async function generatePdf(htmlContent: string, outputFilename: string): Promise<string> {
+export async function generatePdf(htmlContent: string, outputFilename: string, printOptions: any = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const printWindow = new BrowserWindow({
       show: false,
@@ -223,7 +248,8 @@ export async function generatePdf(htmlContent: string, outputFilename: string): 
         const pdfData = await printWindow.webContents.printToPDF({
           printBackground: true,
           pageSize: 'A4',
-          margins: { marginType: 'default' }
+          margins: { marginType: 'default' },
+          ...printOptions
         })
 
         const documentsPath = app.getPath('documents')
@@ -248,6 +274,7 @@ export async function generatePdf(htmlContent: string, outputFilename: string): 
 
 import Handlebars from 'handlebars'
 import { formatPaise } from '../../shared/utils/paise'
+import { getStoreHeaderSettings } from './settings.service'
 
 // Register Handlebars helpers
 Handlebars.registerHelper('formatPaise', function (amount) {
@@ -257,19 +284,39 @@ Handlebars.registerHelper('formatPaiseWithSymbol', function (amount) {
   return formatPaise(amount)
 })
 Handlebars.registerHelper('currentDate', function () {
-  return new Date().toLocaleString()
+  const d = new Date()
+  const day = d.getDate().toString().padStart(2, '0')
+  const month = (d.getMonth() + 1).toString().padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
 })
-
+Handlebars.registerHelper('currentTime', function () {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+})
+Handlebars.registerHelper('calcTotalQty', function (items) {
+  if (!Array.isArray(items)) return 0
+  return items.reduce((sum, i) => sum + (i.quantityUnits || 0), 0)
+})
+Handlebars.registerHelper('calcTaxableVal', function (sale) {
+  const grandTotal = sale.grandTotalPaise || 0
+  const tax = sale.totalTaxPaise || 0
+  return formatPaise(grandTotal - tax).replace('₹', '')
+})
+Handlebars.registerHelper('calcHalfTax', function (totalTaxPaise) {
+  const half = Math.round((totalTaxPaise || 0) / 2)
+  return formatPaise(half).replace('₹', '')
+})
 Handlebars.registerHelper('calcDiscPct', function (mrpPaise, discountPaise) {
   if (!mrpPaise || mrpPaise === 0 || !discountPaise) return '0.0'
   const pct = (discountPaise / mrpPaise) * 100
   return pct.toFixed(1)
 })
-
-// Helper to show the original pack/strip price (unit price × packSize)
 Handlebars.registerHelper('packMrp', function(unitPaise, packSize) {
   const total = (unitPaise || 0) * (packSize || 1)
   return formatPaise(total).replace('₹', '')
+})
+Handlebars.registerHelper('incIndex', function(idx) {
+  return (idx || 0) + 1
 })
 
 const DEFAULT_RECEIPT_TEMPLATE = `
@@ -279,114 +326,256 @@ const DEFAULT_RECEIPT_TEMPLATE = `
   <meta charset="utf-8">
   <style>
     @page { margin: 0; }
+    * { box-sizing: border-box; }
     body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      line-height: 1.2;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      line-height: 1.3;
       width: 80mm;
       margin: 0 auto;
-      padding: 10px;
-      color: #000;
-      background: #fff;
+      padding: 6px;
+      color: #000000;
+      background: #ffffff;
     }
     .text-center { text-align: center; }
     .text-right { text-align: right; }
     .text-left { text-align: left; }
     .bold { font-weight: bold; }
-    .border-b { border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px; }
-    .border-t { border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px; }
-    .border-double { border-top: 3px double #000; border-bottom: 3px double #000; padding: 5px 0; margin: 5px 0; }
     
-    table { width: 100%; border-collapse: collapse; margin: 5px 0; }
-    th, td { padding: 2px 0; vertical-align: top; }
-    
-    .item-row { margin-bottom: 5px; }
-    .item-details { display: flex; justify-content: space-between; font-size: 10px; }
-    
-    .footer { margin-top: 10px; font-size: 10px; }
+    .dashed-line {
+      border-bottom: 1px dashed #000000;
+      margin: 5px 0;
+    }
+    .double-line {
+      border-bottom: 2px solid #000000;
+      margin: 5px 0;
+    }
+
+    .store-name {
+      font-size: 15px;
+      font-weight: 900;
+      text-transform: uppercase;
+      text-align: center;
+      letter-spacing: 0.2px;
+    }
+    .store-sub {
+      font-size: 10px;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 1px;
+    }
+    .store-info {
+      font-size: 9.5px;
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+    }
+    .meta-table td {
+      padding: 1px 0;
+    }
+
+    .item-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+    }
+    .item-table th {
+      border-bottom: 1px dashed #000;
+      padding: 3px 0;
+      font-weight: bold;
+    }
+    .item-table td {
+      padding: 2px 0;
+      vertical-align: top;
+    }
+
+    .item-title {
+      font-weight: bold;
+      font-size: 11px;
+    }
+    .item-subtext {
+      font-size: 9.5px;
+      color: #333333;
+    }
+
+    .savings-box {
+      border: 1px dashed #000000;
+      text-align: center;
+      padding: 6px;
+      margin: 8px 0;
+      font-weight: bold;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 9.5px;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
-  <div class="text-center border-double">
-    <div class="bold" style="font-size: 16px;">SHIV SHAKTI MEDICAL STORES</div>
-  </div>
-
-  <div style="font-size: 11px; margin-bottom: 5px;">
-    <table style="margin: 0;">
-      <tr>
-        <td>Bill: {{sale.billNumber}}</td>
-        <td class="text-right">Date: {{currentDate}}</td>
-      </tr>
-      <tr>
-        <td colspan="2">Pay Mode: {{sale.paymentMode}}</td>
-      </tr>
-    </table>
-    {{#if sale.patientName}}<div>Pt: {{sale.patientName}} {{#if sale.patientPhone}}({{sale.patientPhone}}){{/if}}</div>{{/if}}
-    {{#if sale.doctorName}}<div>Dr: {{sale.doctorName}} {{#if sale.doctorRegNo}}[{{sale.doctorRegNo}}]{{/if}}</div>{{/if}}
-  </div>
-
-  <div class="border-t border-b">
-    <table style="font-size: 11px; text-align: left;">
-      <tr>
-        <th width="45%">Item Name</th>
-        <th width="15%" class="text-center">Qty</th>
-        <th width="20%" class="text-right">Rate</th>
-        <th width="20%" class="text-right">Amount</th>
-      </tr>
-    </table>
-  </div>
+  <!-- STORE HEADER -->
+  <div class="store-name">{{store.storeName}}</div>
+  <div class="store-sub">{{store.storeSubtitle}}</div>
+  {{#if store.storeAddress}}<div class="store-info">{{store.storeAddress}}</div>{{/if}}
   
-  <table style="font-size: 11px;">
-    {{#each items}}
-      <tr>
-        <td width="45%" class="bold">{{@index}}. {{this.brandName}}</td>
-        <td width="15%" class="text-center">{{this.quantityUnits}}</td>
-        <td width="20%" class="text-right">{{packMrp this.salePricePaise this.packSize}}</td>
-        <td width="20%" class="text-right">{{formatPaise this.gstBreakdown.lineTotalPaise}}</td>
-      </tr>
-      <tr>
-        <td colspan="4" style="font-size: 10px; padding-bottom: 5px;" class="text-muted-foreground">
-          &nbsp;&nbsp;&nbsp;MRP: {{packMrp this.mrpPaise this.packSize}} | Disc: {{calcDiscPct this.mrpPaise this.discountPaise}}% | GST: {{this.gstRatePct}}%
-        </td>
-      </tr>
-    {{/each}}
+  {{#if store.storePhone}}
+    <div class="store-info">
+      Ph: {{store.storePhone}} {{#if store.storeProprietor}}| Prop: {{store.storeProprietor}}{{/if}}
+    </div>
+  {{else}}
+    {{#if store.storeProprietor}}<div class="store-info">Prop: {{store.storeProprietor}}</div>{{/if}}
+  {{/if}}
+
+  {{#if store.storeGstin}}
+    {{#if store.storeDl}}
+      <div class="store-info">GSTIN: {{store.storeGstin}} | DL No: {{store.storeDl}}</div>
+    {{else}}
+      <div class="store-info">GSTIN: {{store.storeGstin}}</div>
+    {{/if}}
+  {{else}}
+    {{#if store.storeDl}}
+      <div class="store-info">DL No: {{store.storeDl}}</div>
+    {{/if}}
+  {{/if}}
+
+  <div class="dashed-line"></div>
+
+  <!-- BILL META -->
+  <table class="meta-table">
+    <tr>
+      <td>Bill No: {{sale.billNumber}}</td>
+      <td class="text-right">Date: {{currentDate}}</td>
+    </tr>
+    <tr>
+      <td>Pay Mode: {{sale.paymentMode}}</td>
+      <td class="text-right">Time: {{currentTime}}</td>
+    </tr>
   </table>
 
-  <div class="border-t border-b" style="padding: 2px 0;">
-    Total Items: {{items.length}}
-  </div>
+  <div class="dashed-line"></div>
 
-  <div>
-    <table style="width: 100%;">
+  <!-- PATIENT / DOCTOR META -->
+  <table class="meta-table">
+    {{#if sale.patientName}}
+    <tr>
+      <td style="width: 25%;">Patient:</td>
+      <td class="text-right bold">{{sale.patientName}}</td>
+    </tr>
+    {{/if}}
+    {{#if sale.patientAddress}}
+    <tr>
+      <td style="width: 25%;">Address:</td>
+      <td class="text-right">{{sale.patientAddress}}</td>
+    </tr>
+    {{/if}}
+    {{#if sale.doctorName}}
+    <tr>
+      <td style="width: 25%;">Doctor:</td>
+      <td class="text-right bold">Dr. {{sale.doctorName}}</td>
+    </tr>
+    {{/if}}
+  </table>
+
+  <div class="dashed-line"></div>
+
+  <!-- ITEM TABLE -->
+  <table class="item-table">
+    <thead>
       <tr>
-        <td>Subtotal:</td>
-        <td class="text-right">{{formatPaiseWithSymbol sale.subtotalPaise}}</td>
+        <th class="text-left" style="width: 45%;">Item</th>
+        <th class="text-center" style="width: 15%;">Qty</th>
+        <th class="text-right" style="width: 20%;">Rate</th>
+        <th class="text-right" style="width: 20%;">Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each items}}
+      <tr>
+        <td colspan="4" style="padding-top: 4px;">
+          <div class="item-title">{{incIndex @index}}. {{this.brandName}}</div>
+          <div class="item-subtext">
+            Batch: {{this.batchNumber}} | Exp: {{this.expiryDate}}
+          </div>
+          <div class="item-subtext">
+            MRP: ₹{{packMrp this.mrpPaise this.packSize}} {{#if this.discountPaise}}| Disc: {{calcDiscPct this.mrpPaise this.discountPaise}}%{{/if}} | GST: {{this.gstRatePct}}%
+          </div>
+        </td>
       </tr>
       <tr>
-        <td>Total Tax (CGST + SGST):</td>
-        <td class="text-right">{{formatPaiseWithSymbol sale.totalTaxPaise}}</td>
+        <td colspan="3" class="text-left" style="padding-bottom: 4px;">
+          {{this.quantityUnits}} x ₹{{packMrp this.salePricePaise 1}}
+        </td>
+        <td class="text-right bold" style="padding-bottom: 4px;">
+          ₹{{formatPaise this.gstBreakdown.lineTotalPaise}}
+        </td>
       </tr>
-    </table>
-  </div>
+      {{/each}}
+    </tbody>
+  </table>
 
-  <div class="border-t border-b" style="padding: 2px 0;">
-    <table style="width: 100%;">
-      <tr class="bold" style="font-size: 14px;">
-        <td>GRAND TOTAL:</td>
-        <td class="text-right">{{formatPaiseWithSymbol sale.grandTotalPaise}}</td>
-      </tr>
-    </table>
-  </div>
+  <div class="dashed-line"></div>
 
+  <!-- QUANTITY SUMMARY -->
+  <table class="meta-table">
+    <tr>
+      <td>Total Items: {{items.length}}</td>
+      <td class="text-right">Total Qty: {{calcTotalQty items}}</td>
+    </tr>
+  </table>
+
+  <div class="dashed-line"></div>
+
+  <!-- TAX & TOTAL BREAKDOWN -->
+  <table class="meta-table">
+    <tr>
+      <td>Taxable Value</td>
+      <td class="text-right">₹{{calcTaxableVal sale}}</td>
+    </tr>
+    <tr>
+      <td>CGST (6%)</td>
+      <td class="text-right">₹{{calcHalfTax sale.totalTaxPaise}}</td>
+    </tr>
+    <tr>
+      <td>SGST (6%)</td>
+      <td class="text-right">₹{{calcHalfTax sale.totalTaxPaise}}</td>
+    </tr>
+    <tr>
+      <td>Round Off</td>
+      <td class="text-right">₹-0.00</td>
+    </tr>
+  </table>
+
+  <div class="double-line"></div>
+
+  <!-- GRAND TOTAL -->
+  <table class="meta-table">
+    <tr class="bold" style="font-size: 13px;">
+      <td>GRAND TOTAL</td>
+      <td class="text-right">₹{{formatPaise sale.grandTotalPaise}}</td>
+    </tr>
+  </table>
+
+  <div class="dashed-line"></div>
+
+  <!-- SAVINGS BOX -->
   {{#if sale.totalDiscountPaise}}
-  <div class="border-double text-center bold" style="font-size: 12px; margin-top: 5px;">
-    You Saved {{formatPaiseWithSymbol sale.totalDiscountPaise}} on this bill!
+  <div class="savings-box">
+    YOU SAVED {{formatPaiseWithSymbol sale.totalDiscountPaise}} ON THIS BILL
   </div>
   {{/if}}
 
-  <div class="text-center footer">
-    <div>* Schedule H/H1/X drugs must be sold on prescription only *</div>
-    <div style="margin-top: 5px;">Thank you for your visit!</div>
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>Goods once sold will not be taken back.</div>
+    <div class="bold" style="margin-top: 3px; font-size: 10px;">Thank you for your visit! Get well soon.</div>
   </div>
 </body>
 </html>
@@ -403,8 +592,9 @@ export function registerPrintHandlers() {
         templateStr = fs.readFileSync(templatePath, 'utf8')
       }
 
+      const storeSettings = getStoreHeaderSettings()
       const template = Handlebars.compile(templateStr)
-      const html = template({ sale: saleData, items: itemsData })
+      const html = template({ sale: saleData, items: itemsData, store: storeSettings })
 
       // Save PDF copy silently
       const pdfFilename = `Receipts/${saleData.billNumber}.pdf`
@@ -418,7 +608,7 @@ export function registerPrintHandlers() {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.PRINT_PDF, async (_, htmlContent: string, filename: string) => {
-    return generatePdf(htmlContent, filename)
+  ipcMain.handle(IPC_CHANNELS.PRINT_PDF, async (_, htmlContent: string, filename: string, options?: any) => {
+    return generatePdf(htmlContent, filename, options)
   })
 }

@@ -33,6 +33,29 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
   })
   const [error, setError] = useState<string | null>(null)
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        brand_name: product?.brand_name || '',
+        generic_name: product?.generic_name || '',
+        manufacturer: product?.manufacturer || '',
+        category: product?.category || 'GENERIC',
+        pack_size: String(product?.pack_size || 1),
+        barcode: product?.barcode || '',
+        hsn_code: product?.hsn_code || '',
+        gst_rate_pct: String(product?.gst_rate_pct ?? 12),
+        schedule_flag: product?.schedule_flag || 'NONE',
+        shelf_rack: product?.shelf_rack || '',
+        initial_batch_number: '',
+        initial_expiry_date: '',
+        initial_quantity: '',
+        initial_mrp: '',
+        initial_purchase_rate: ''
+      })
+      setError(null)
+    }
+  }, [isOpen, product])
+
   if (!isOpen) return null
 
   const isPending = isCreating || isUpdating

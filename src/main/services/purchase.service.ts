@@ -72,6 +72,31 @@ export function createPurchase(payload: PurchasePayload): number {
     ) VALUES (?, 'PURCHASE_IN', ?, ?, 'Manual Purchase Entry', ?)
   `)
 
+  // Server-side recalculation & validation of purchase totals
+  const getProduct = db.prepare('SELECT pack_size FROM products WHERE id = ?')
+  let calculatedInvoiceTotalPaise = 0
+
+  for (const item of payload.items) {
+    const product = getProduct.get(item.productId) as { pack_size: number } | undefined
+    const packSize = product?.pack_size ?? 1
+
+    if (item.quantityUnits < item.quantityPacks * packSize) {
+      throw new Error(`Quantity units mismatch for Product ID ${item.productId}: expected at least ${item.quantityPacks * packSize}, got ${item.quantityUnits}`)
+    }
+
+    const calculatedLineTotal = item.totalPaise > 0 ? item.totalPaise : Math.round((item.netRatePaise || item.purchaseRatePaise) * item.quantityPacks)
+    calculatedInvoiceTotalPaise += calculatedLineTotal
+  }
+
+  const finalInvoiceTotalPaise = payload.totalAmountPaise > 0 
+    ? payload.totalAmountPaise 
+    : calculatedInvoiceTotalPaise
+
+  // Allow up to ₹1.00 (100 paise) tolerance for invoice level tax rounding differences
+  if (payload.totalAmountPaise > 0 && Math.abs(payload.totalAmountPaise - calculatedInvoiceTotalPaise) > 100) {
+    throw new Error('PURCHASE_TOTAL_MISMATCH')
+  }
+
   // 2. Execute Transaction
   const executePurchase = db.transaction(() => {
     // Check if invoice already exists for this vendor to prevent duplicates
@@ -86,9 +111,21 @@ export function createPurchase(payload: PurchasePayload): number {
       payload.invoiceNumber,
       payload.invoiceDate,
       payload.userId,
-      payload.totalAmountPaise
+      finalInvoiceTotalPaise
     )
     const invoiceId = invResult.lastInsertRowid as number
+
+    // Update Vendor Ledger & Balance
+    db.prepare(`
+      INSERT INTO vendor_ledger (vendor_id, transaction_type, amount_paise, reference_id)
+      VALUES (?, 'PURCHASE_INVOICE', ?, ?)
+    `).run(payload.vendorId, finalInvoiceTotalPaise, payload.invoiceNumber)
+
+    db.prepare(`
+      UPDATE vendors
+      SET current_balance_paise = COALESCE(current_balance_paise, 0) + ?
+      WHERE id = ?
+    `).run(finalInvoiceTotalPaise, payload.vendorId)
 
     // Process Items
     for (const item of payload.items) {

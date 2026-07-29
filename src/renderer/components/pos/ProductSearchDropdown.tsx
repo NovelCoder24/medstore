@@ -11,12 +11,11 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // Hardware barcode scanner listener
   useBarcodeScanner((barcode) => {
-    // We could immediately invoke a strict barcode search here or just set the query
-    // and let the dropdown handle it. Since we want immediate action:
     setQuery(barcode)
     setDebouncedQuery(barcode)
     setIsOpen(true)
@@ -25,14 +24,22 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query)
-      if (query.trim()) setIsOpen(true)
+      if (query.trim()) {
+        setIsOpen(true)
+        setSelectedIndex(-1)
+      }
     }, 200)
     return () => clearTimeout(timer)
   }, [query])
 
   const { data, isLoading } = useProducts({ query: debouncedQuery, pageSize: 10 })
 
-  // If a barcode scan matches exactly ONE product, we could auto-select it.
+  // Reset selectedIndex when data changes
+  useEffect(() => {
+    setSelectedIndex(-1)
+  }, [data])
+
+  // If a barcode scan matches exactly ONE product, we auto-select it.
   useEffect(() => {
     if (data?.data.length === 1 && debouncedQuery === data.data[0].barcode) {
       onSelectProduct(data.data[0])
@@ -52,6 +59,28 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen || !data?.data || data.data.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev < data.data.length - 1 ? prev + 1 : 0))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedIndex((prev) => (prev > 0 ? prev - 1 : data.data.length - 1))
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && selectedIndex < data.data.length) {
+        e.preventDefault()
+        onSelectProduct(data.data[selectedIndex])
+        setQuery('')
+        setIsOpen(false)
+        setSelectedIndex(-1)
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false)
+    }
+  }
+
   return (
     <div ref={wrapperRef} className="relative w-full">
       <div className="flex items-center gap-2 px-3 py-3 bg-card border rounded-md shadow-sm focus-within:ring-2 focus-within:ring-primary">
@@ -62,6 +91,7 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
           placeholder="Scan Barcode or Search by Brand, Generic, or Salt..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
           onFocus={() => { if (query.trim()) setIsOpen(true) }}
         />
         {isLoading && <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />}
@@ -70,10 +100,12 @@ export function ProductSearchDropdown({ onSelectProduct }: ProductSearchDropdown
       {isOpen && data?.data && data.data.length > 0 && (
         <div className="absolute z-[100] w-full mt-1 bg-white border rounded-md shadow-xl max-h-96 overflow-y-auto">
           <ul className="py-1">
-            {data.data.map((product) => (
+            {data.data.map((product, idx) => (
               <li key={product.id}>
                 <button
-                  className="w-full text-left px-4 py-3 hover:bg-muted focus:bg-muted outline-none transition-colors border-b last:border-0"
+                  className={`w-full text-left px-4 py-3 outline-none transition-colors border-b last:border-0 ${
+                    idx === selectedIndex ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted focus:bg-muted'
+                  }`}
                   onClick={() => {
                     onSelectProduct(product)
                     setQuery('')
