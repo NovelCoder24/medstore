@@ -95,8 +95,17 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
         }
       }
 
+      const {
+        initial_batch_number,
+        initial_expiry_date,
+        initial_quantity,
+        initial_mrp,
+        initial_purchase_rate,
+        ...baseData
+      } = formData
+
       const payload = {
-        ...formData,
+        ...baseData,
         pack_size: parseInt(formData.pack_size) || 1,
         gst_rate_pct: parseFloat(formData.gst_rate_pct) || 0,
         // Convert empty strings to null for backend
@@ -109,7 +118,8 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
       }
 
       if (product) {
-        await updateProduct({ id: product.id, data: payload })
+        const { initial_batch: _, ...updatePayload } = payload
+        await updateProduct({ id: product.id, data: updatePayload })
       } else {
         await createProduct(payload)
       }

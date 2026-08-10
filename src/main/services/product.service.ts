@@ -454,7 +454,9 @@ export function updateBatchStatus(batchId: number, newStatus: string, actorUserI
 
 export function deleteBatch(batchId: number) {
   const db = getDatabase()
-  db.prepare('DELETE FROM batches WHERE id = ?').run(batchId)
+  // Soft-delete: preserve the row for historical reporting (drug register compliance)
+  // but hide it from active POS batch selection dropdowns
+  db.prepare('UPDATE batches SET is_active = 0, status = \'DISPOSED\' WHERE id = ?').run(batchId)
 }
 
 export function registerProductHandlers() {

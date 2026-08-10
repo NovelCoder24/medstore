@@ -20,7 +20,7 @@ import { AuditLogs } from './components/settings/AuditLogs'
 
 export function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null)
-  const [activeTab, setActiveTab] = useState('POS Billing')
+  const [activeTab, setActiveTab] = useState('Dashboard')
   const user = useAuthStore((s) => s.user)
 
   const checkFirstRun = async () => {

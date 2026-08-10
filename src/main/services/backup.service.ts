@@ -159,6 +159,43 @@ export function registerBackupHandlers() {
 
 let backupInterval: NodeJS.Timeout | null = null
 
+/**
+ * Prune OCR invoice image archives older than 180 days.
+ * The structured invoice data in SQLite (purchase_invoices, purchase_items, vendor_ledger)
+ * is NEVER deleted — only the heavy raw JPEG/PDF image files are purged to reclaim disk space.
+ * 180 days covers standard distributor audit windows in India.
+ */
+function pruneOldInvoiceImages(): number {
+  const userDataPath = app.getPath('userData')
+  const invoicesDir = join(userDataPath, 'invoices')
+
+  if (!existsSync(invoicesDir)) return 0
+
+  const RETENTION_MS = 180 * 24 * 60 * 60 * 1000 // 180 days in milliseconds
+  const cutoffTime = Date.now() - RETENTION_MS
+  let pruned = 0
+
+  try {
+    const files = readdirSync(invoicesDir)
+    for (const file of files) {
+      const filePath = join(invoicesDir, file)
+      try {
+        const stats = statSync(filePath)
+        if (stats.isFile() && stats.birthtimeMs < cutoffTime) {
+          unlinkSync(filePath)
+          pruned++
+        }
+      } catch (e) {
+        // Skip files that can't be stat'd or deleted (locked, permissions, etc.)
+      }
+    }
+  } catch (e) {
+    console.error('[Backup] Failed to scan invoices directory for pruning:', e)
+  }
+
+  return pruned
+}
+
 export function startScheduledBackups() {
   if (backupInterval) clearInterval(backupInterval)
   
@@ -169,8 +206,15 @@ export function startScheduledBackups() {
     try {
       await createBackup()
       console.log('Scheduled backup completed successfully.')
+
+      // After successful backup, prune old OCR invoice images (>180 days)
+      const pruned = pruneOldInvoiceImages()
+      if (pruned > 0) {
+        console.log(`[Backup] Pruned ${pruned} OCR invoice image(s) older than 180 days.`)
+      }
     } catch (error) {
       console.error('Scheduled backup failed:', error)
     }
   }, TWO_HOURS_MS)
 }
+

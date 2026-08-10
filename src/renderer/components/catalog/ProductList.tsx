@@ -17,11 +17,11 @@ import type { Product } from '../../../main/services/product.service'
 
 // ── Status badge styles ──
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  ACTIVE:      { bg: 'bg-emerald-100 dark:bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-400', label: 'Active' },
-  QUARANTINED: { bg: 'bg-amber-100 dark:bg-amber-500/15',    text: 'text-amber-700 dark:text-amber-400',    label: 'Quarantined' },
-  EXPIRED:     { bg: 'bg-red-100 dark:bg-red-500/15',        text: 'text-red-700 dark:text-red-400',        label: 'Expired' },
-  RETURNED:    { bg: 'bg-blue-100 dark:bg-blue-500/15',      text: 'text-blue-700 dark:text-blue-400',      label: 'Returned' },
-  DISPOSED:    { bg: 'bg-gray-100 dark:bg-gray-500/15',      text: 'text-gray-500 dark:text-gray-400',      label: 'Disposed' },
+  ACTIVE: { bg: 'bg-emerald-100 dark:bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-400', label: 'Active' },
+  QUARANTINED: { bg: 'bg-amber-100 dark:bg-amber-500/15', text: 'text-amber-700 dark:text-amber-400', label: 'Quarantined' },
+  EXPIRED: { bg: 'bg-red-100 dark:bg-red-500/15', text: 'text-red-700 dark:text-red-400', label: 'Expired' },
+  RETURNED: { bg: 'bg-blue-100 dark:bg-blue-500/15', text: 'text-blue-700 dark:text-blue-400', label: 'Returned' },
+  DISPOSED: { bg: 'bg-gray-100 dark:bg-gray-500/15', text: 'text-gray-500 dark:text-gray-400', label: 'Disposed' },
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -42,11 +42,11 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
 }) {
   const { data: vendors } = useVendors()
   const [batchNumber, setBatchNumber] = useState(batch.batch_number || '')
-  
+
   // Format expiry date for month input YYYY-MM
   const initialExpiryMonth = batch.expiry_date ? String(batch.expiry_date).slice(0, 7) : ''
   const [expiryDate, setExpiryDate] = useState(initialExpiryMonth)
-  
+
   const [vendorId, setVendorId] = useState(batch.vendor_id ? String(batch.vendor_id) : '')
   const [mrp, setMrp] = useState((batch.mrp_paise / 100).toFixed(2))
   const [ptr, setPtr] = useState((batch.purchase_rate_paise / 100).toFixed(2))
@@ -243,8 +243,8 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
             )}
 
             <div className="border-t my-1" />
-            
-            <button 
+
+            <button
               onClick={async () => {
                 if (window.confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
                   try {
@@ -297,7 +297,7 @@ function ProductRow({ product, onEditProduct }: { product: Product; onEditProduc
 
   return (
     <>
-      <tr 
+      <tr
         className={`hover:bg-muted/30 transition-colors cursor-pointer ${isOutOfStock ? 'bg-red-500/5' : ''}`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -385,19 +385,19 @@ function ProductRow({ product, onEditProduct }: { product: Product; onEditProduc
                   <tbody className="divide-y">
                     {batches.map((batch: any) => {
                       const isInactive = batch.status !== 'ACTIVE'
-                      
+
                       const getExpiryInfo = (sortDateStr: string, isActive: boolean) => {
                         if (!sortDateStr) return { class: 'text-muted-foreground' };
                         if (!isActive) return { class: 'text-muted-foreground' };
                         const daysLeft = Math.ceil((new Date(sortDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                        
+
                         if (daysLeft <= 0) return { class: 'text-red-700 font-bold bg-red-100 px-1.5 py-0.5 rounded', icon: true };
                         if (daysLeft <= 30) return { class: 'text-red-600 font-bold', icon: true };
                         if (daysLeft <= 90) return { class: 'text-orange-500 font-semibold', icon: true };
                         if (daysLeft <= 180) return { class: 'text-amber-500 font-medium', icon: false };
                         return { class: 'text-emerald-600', icon: false };
                       }
-                      
+
                       const expiryInfo = getExpiryInfo(batch.expiry_sort_date, !isInactive)
 
                       return (
@@ -449,7 +449,7 @@ export function ProductList() {
   const [isProductFormOpen, setIsProductFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  
+
   const [filters, setFilters] = useState({
     hideOutOfStock: false,
     onlyOutOfStock: false,
@@ -457,7 +457,7 @@ export function ProductList() {
     ethicalOnly: false,
     expiringSoon: false
   })
-  
+
   // Invalidate cache whenever Inventory tab is mounted to get latest stock levels
   React.useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['products'] })
@@ -470,10 +470,10 @@ export function ProductList() {
     return () => clearTimeout(timer)
   }, [query])
 
-  const { data, isLoading, error, refetch } = useProducts({ 
-    query: debouncedQuery, 
+  const { data, isLoading, error, refetch } = useProducts({
+    query: debouncedQuery,
     page: 1,
-    ...filters 
+    ...filters
   })
 
   const handleManualRefresh = async () => {
@@ -508,7 +508,7 @@ export function ProductList() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Inventory</h2>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={handleManualRefresh}
             disabled={isRefreshing || isLoading}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-muted/80 transition-colors disabled:opacity-50"
@@ -517,14 +517,14 @@ export function ProductList() {
             <RotateCcw className={`w-4 h-4 ${isRefreshing || isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button 
+          <button
             onClick={() => setIsImportOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground bg-muted rounded-md hover:bg-muted/80 transition-colors"
           >
             <Upload className="w-4 h-4" />
             Import CSV
           </button>
-          <button 
+          <button
             onClick={() => setIsProductFormOpen(true)}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 transition-colors"
           >
@@ -535,13 +535,13 @@ export function ProductList() {
       </div>
 
       <ImportCsvModal isOpen={isImportOpen} onOpenChange={setIsImportOpen} />
-      <ProductFormModal 
-        isOpen={isProductFormOpen || !!editingProduct} 
+      <ProductFormModal
+        isOpen={isProductFormOpen || !!editingProduct}
         product={editingProduct || undefined}
         onClose={() => {
           setIsProductFormOpen(false)
           setEditingProduct(null)
-        }} 
+        }}
       />
 
       <div className="flex flex-col gap-3">
@@ -556,33 +556,33 @@ export function ProductList() {
           />
           {isLoading && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
         </div>
-        
+
         {/* Quick Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          <FilterChip 
-            label="Hide Out of Stock" 
-            active={filters.hideOutOfStock} 
-            onClick={() => toggleFilter('hideOutOfStock')} 
+          <FilterChip
+            label="Hide Out of Stock"
+            active={filters.hideOutOfStock}
+            onClick={() => toggleFilter('hideOutOfStock')}
           />
-          <FilterChip 
-            label="Only Out of Stock" 
-            active={filters.onlyOutOfStock} 
-            onClick={() => toggleFilter('onlyOutOfStock')} 
+          <FilterChip
+            label="Only Out of Stock"
+            active={filters.onlyOutOfStock}
+            onClick={() => toggleFilter('onlyOutOfStock')}
           />
-          <FilterChip 
-            label="Generic Only" 
-            active={filters.genericOnly} 
-            onClick={() => toggleFilter('genericOnly')} 
+          <FilterChip
+            label="Generic Only"
+            active={filters.genericOnly}
+            onClick={() => toggleFilter('genericOnly')}
           />
-          <FilterChip 
-            label="Ethical Only" 
-            active={filters.ethicalOnly} 
-            onClick={() => toggleFilter('ethicalOnly')} 
+          <FilterChip
+            label="Ethical Only"
+            active={filters.ethicalOnly}
+            onClick={() => toggleFilter('ethicalOnly')}
           />
-          <FilterChip 
-            label="Expiring < 90 Days" 
-            active={filters.expiringSoon} 
-            onClick={() => toggleFilter('expiringSoon')} 
+          <FilterChip
+            label="Expiring < 90 Days"
+            active={filters.expiringSoon}
+            onClick={() => toggleFilter('expiringSoon')}
           />
         </div>
       </div>
@@ -616,7 +616,7 @@ export function ProductList() {
           </table>
         </div>
       )}
-      
+
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>Showing {data?.data.length || 0} of {data?.total || 0} items</span>
       </div>
@@ -628,11 +628,10 @@ function FilterChip({ label, active, onClick }: { label: string, active: boolean
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-        active 
-          ? 'bg-primary text-primary-foreground border-primary' 
+      className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${active
+          ? 'bg-primary text-primary-foreground border-primary'
           : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
-      }`}
+        }`}
     >
       {label}
     </button>

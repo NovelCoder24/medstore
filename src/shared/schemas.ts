@@ -17,6 +17,7 @@ export const SalePayloadSchema = z.object({
   userId: z.number().int().positive(),
   patientName: z.string().nullable().optional(),
   patientPhone: z.string().nullable().optional(),
+  customerAddress: z.string().nullable().optional(),
   doctorName: z.string().nullable().optional(),
   doctorRegNo: z.string().nullable().optional(),
   paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'CREDIT']),

@@ -17,6 +17,7 @@ import { registerAuditHandlers } from './services/audit.service'
 import { registerBackupHandlers, createBackup, startScheduledBackups } from './services/backup.service'
 import { registerCustomerHandlers } from './services/customer.service'
 import { registerReportsHandlers } from './services/reports.service'
+import { initAutoUpdater } from './services/updater.service'
 
 function createWindow(): void {
   console.log("=== MedStore Documents Path: ===", app.getPath('documents'))
@@ -34,11 +35,14 @@ function createWindow(): void {
       nodeIntegration: false,
       devTools: is.dev
     }
-  })
-
+  }) 
   // mainWindow.webContents.openDevTools()
 
+  // Initialize auto updater
+  initAutoUpdater(mainWindow)
+
   mainWindow.on('ready-to-show', () => {
+    mainWindow.maximize()
     mainWindow.show()
   })
 

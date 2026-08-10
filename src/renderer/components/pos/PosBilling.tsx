@@ -13,6 +13,13 @@ export function PosBilling() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => setErrorMsg(null), 7000)
+      return () => clearTimeout(timer)
+    }
+  }, [errorMsg])
+
   const totals = getTotals()
 
   // F12 Hotkey to open checkout directly

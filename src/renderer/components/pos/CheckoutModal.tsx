@@ -54,11 +54,23 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
   const totals = getTotals()
 
   const hasScheduleHDrug = items.some(item => ['H', 'H1', 'X'].includes(item.scheduleFlag))
+  const hasScheduleH1XDrug = items.some(item => ['H1', 'X'].includes(item.scheduleFlag))
   const isDoctorDetailsIncomplete = !patient.doctorName?.trim() || !patient.doctorRegNo?.trim()
+  const isAddressIncomplete = !patient.address?.trim()
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault()
     if (items.length === 0 || !user) return
+
+    if (hasScheduleHDrug && isDoctorDetailsIncomplete) {
+      setError('Doctor Name and Registration Number are required for Schedule H/H1/X drugs.')
+      return
+    }
+
+    if (hasScheduleH1XDrug && isAddressIncomplete) {
+      setError('Patient Address is legally required for Schedule H1/X drugs.')
+      return
+    }
 
     setLoading(true)
     setError(null)
@@ -68,6 +80,7 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
         userId: user.id,
         patientName: patient.name,
         patientPhone: patient.phone,
+        customerAddress: patient.address,
         doctorName: patient.doctorName,
         doctorRegNo: patient.doctorRegNo,
         paymentMode,
@@ -221,10 +234,28 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                 </div>
 
                 <div className="border-t pt-4 space-y-4">
-                  {hasScheduleHDrug && isDoctorDetailsIncomplete && (
-                    <div className="p-3 text-sm text-yellow-700 bg-yellow-50 rounded-md flex gap-2 items-start border border-yellow-200">
-                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-yellow-600" />
-                      <p><strong>Schedule H/H1/X drugs detected in cart.</strong> Doctor Name and Registration Number are legally required.</p>
+                  {hasScheduleHDrug && (
+                    <div className="p-3 text-sm text-yellow-700 bg-yellow-50 rounded-md flex flex-col gap-2 border border-yellow-200">
+                      <div className="flex gap-2 items-start">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-yellow-600" />
+                        <p><strong>Schedule H/H1/X drugs detected in cart.</strong> Doctor Name and Registration Number are legally required.</p>
+                      </div>
+                      {hasScheduleH1XDrug && (
+                        <p className="ml-6 text-red-600 font-medium">Schedule H1/X: Patient Address is also strictly required.</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {hasScheduleH1XDrug && (
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Patient Address <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border rounded-md outline-none focus:ring-2 focus:ring-primary"
+                        value={patient.address}
+                        onChange={e => updatePatient({ address: e.target.value })}
+                        placeholder="Required for Schedule H1/X"
+                      />
                     </div>
                   )}
                   

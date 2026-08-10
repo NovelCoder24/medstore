@@ -5,9 +5,9 @@ import { useAuthStore } from '../../store/auth.store'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { formatPaise } from '../../../shared/utils/paise'
 import { Vendor } from '../../../main/services/vendor.service'
-import { 
-  Plus, Building2, Loader2, Search, CreditCard, History, Edit3, 
-  Phone, Mail, MapPin, CheckCircle2, X, Wallet, 
+import {
+  Plus, Building2, Loader2, Search, CreditCard, History, Edit3,
+  Phone, Mail, MapPin, CheckCircle2, X, Wallet,
   Landmark, RotateCcw
 } from 'lucide-react'
 
@@ -85,7 +85,7 @@ function InstalmentPaymentModal({ vendor, onClose }: PaymentModalProps) {
               <p className="text-xs text-muted-foreground font-medium">{vendor.name}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
           >
@@ -168,11 +168,10 @@ function InstalmentPaymentModal({ vendor, onClose }: PaymentModalProps) {
                   key={mode}
                   type="button"
                   onClick={() => setPaymentMode(mode)}
-                  className={`py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center ${
-                    paymentMode === mode
+                  className={`py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center ${paymentMode === mode
                       ? 'bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/30'
                       : 'bg-muted hover:bg-muted/80 text-foreground font-semibold border-border'
-                  }`}
+                    }`}
                 >
                   {mode.replace('_', ' ')}
                 </button>
@@ -269,7 +268,7 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
                 {formatPaise(vendor.current_balance_paise || 0)}
               </div>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
             >
@@ -282,21 +281,19 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
         <div className="flex border-b border-border px-6 bg-muted/20">
           <button
             onClick={() => setActiveTab('PAYMENTS')}
-            className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${
-              activeTab === 'PAYMENTS'
+            className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${activeTab === 'PAYMENTS'
                 ? 'border-primary text-primary font-extrabold'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Instalment Payments ({payments?.length || 0})
           </button>
           <button
             onClick={() => setActiveTab('LEDGER')}
-            className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${
-              activeTab === 'LEDGER'
+            className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${activeTab === 'LEDGER'
                 ? 'border-primary text-primary font-extrabold'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Account Ledger History ({ledger?.length || 0})
           </button>
@@ -385,20 +382,18 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
                               {new Date(entry.created_at).toLocaleString()}
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`font-bold px-2.5 py-0.5 rounded-md text-[10px] border ${
-                                entry.transaction_type === 'PURCHASE_INVOICE' 
+                              <span className={`font-bold px-2.5 py-0.5 rounded-md text-[10px] border ${entry.transaction_type === 'PURCHASE_INVOICE'
                                   ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
                                   : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                              }`}>
+                                }`}>
                                 {entry.transaction_type.replace('_', ' ')}
                               </span>
                             </td>
                             <td className="px-4 py-3 font-mono font-semibold text-foreground">
                               {entry.reference_id || '-'}
                             </td>
-                            <td className={`px-4 py-3 text-right font-extrabold ${
-                              isAddition ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
-                            }`}>
+                            <td className={`px-4 py-3 text-right font-extrabold ${isAddition ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                              }`}>
                               {isAddition ? '+' : ''}{formatPaise(entry.amount_paise)}
                             </td>
                           </tr>
@@ -492,8 +487,8 @@ function VendorFormModal({ vendor, isOpen, onClose }: VendorFormModalProps) {
               {vendor ? 'Edit Supplier Details' : 'Add New Supplier / Vendor'}
             </h3>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
           >
             <X className="w-5 h-5" />
@@ -636,7 +631,7 @@ export function VendorList() {
           >
             <RotateCcw className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={() => {
               setEditingVendor(null)
               setIsFormOpen(true)
@@ -714,8 +709,8 @@ export function VendorList() {
             const hasDue = duePaise > 0
 
             return (
-              <div 
-                key={vendor.id} 
+              <div
+                key={vendor.id}
                 className="flex flex-col p-4 bg-background border border-border rounded-2xl shadow-sm hover:shadow-md transition-all group"
               >
                 <div className="space-y-2.5">

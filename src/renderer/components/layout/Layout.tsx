@@ -1,20 +1,22 @@
 import React from 'react'
 import { useAuthStore } from '../../store/auth.store'
-import { LogOut, LayoutDashboard, ShoppingCart, PackageSearch, Users, Settings, ShoppingBag, FileDown, ShieldCheck, ClipboardList } from 'lucide-react'
+import { 
+  LogOut, LayoutDashboard, CreditCard, PackageSearch, Users, 
+  ShoppingCart, Truck, History, Pill, BadgeCheck, FileText, Settings 
+} from 'lucide-react'
 import { ErrorBoundary } from './ErrorBoundary'
 
-const navItems = [
-  { icon: ShoppingCart, label: 'POS Billing', role: 'CASHIER' },
+const mainNavItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', role: 'OWNER' },
+  { icon: CreditCard, label: 'POS Billing', role: 'CASHIER' },
   { icon: PackageSearch, label: 'Inventory', role: 'CASHIER' },
   { icon: Users, label: 'Customers', role: 'CASHIER' },
-  { icon: FileDown, label: 'Purchases', role: 'OWNER' },
-  { icon: Users, label: 'Suppliers', role: 'OWNER' },
-  { icon: LayoutDashboard, label: 'Dashboard', role: 'OWNER' },
-  { icon: ShoppingBag, label: 'Sales History', role: 'OWNER' },
-  { icon: ClipboardList, label: 'Drug Register', role: 'OWNER' },
-  { icon: Users, label: 'Staff', role: 'OWNER' },
-  { icon: ShieldCheck, label: 'Audit Trail', role: 'OWNER' },
-  { icon: Settings, label: 'Settings', role: 'OWNER' },
+  { icon: ShoppingCart, label: 'Purchases', role: 'OWNER' },
+  { icon: Truck, label: 'Suppliers', role: 'OWNER' },
+  { icon: History, label: 'Sales History', role: 'OWNER' },
+  { icon: Pill, label: 'Drug Register', role: 'OWNER' },
+  { icon: BadgeCheck, label: 'Staff', role: 'OWNER' },
+  { icon: FileText, label: 'Audit Trail', role: 'OWNER' },
 ]
 
 interface LayoutProps {
@@ -26,55 +28,85 @@ interface LayoutProps {
 export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
   const { user, logout, isOwner } = useAuthStore()
 
-  const allowedNavItems = navItems.filter(
+  const allowedNavItems = mainNavItems.filter(
     (item) => item.role === 'CASHIER' || isOwner()
   )
 
+  const userInitial = (user?.display_name || user?.username || 'P').charAt(0).toUpperCase()
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <aside className="w-64 flex flex-col border-r bg-card">
-        <div className="p-6">
-          <h1 className="text-2xl font-bold tracking-tight text-primary">MedStore</h1>
-          <p className="text-xs text-muted-foreground mt-1">Pharmacy POS</p>
+      {/* SideNavBar */}
+      <aside className="w-[280px] bg-[#F2F4F6] border-r border-border flex flex-col py-6 gap-2 z-50 select-none">
+        {/* Brand Header */}
+        <div className="px-6 mb-2">
+          <h1 className="text-2xl font-black text-primary tracking-tight">MedStore</h1>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
-          {allowedNavItems.map((item) => (
+        {/* Pharmacist / User Profile Strip */}
+        <div className="px-6 mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-sm shadow-xs">
+              {userInitial}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground line-clamp-1">
+                Welcome, {user?.display_name || 'Pharmacist'}
+              </p>
+              <p className="text-[11px] text-muted-foreground font-medium">
+                {isOwner() ? 'Central Pharmacy Branch' : 'Cashier Staff'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Navigation Tabs */}
+        <nav className="flex-1 overflow-y-auto px-4 flex flex-col gap-1 custom-scrollbar">
+          {allowedNavItems.map((item) => {
+            const isActive = activeTab === item.label
+            const Icon = item.icon
+            return (
+              <button
+                key={item.label}
+                onClick={() => onTabChange(item.label)}
+                className={`w-full px-4 py-3 flex items-center gap-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] ${
+                  isActive
+                    ? 'bg-primary/15 text-primary shadow-xs'
+                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground font-medium'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                {item.label}
+              </button>
+            )
+          })}
+
+          {/* Settings Tab - Fixed at Bottom */}
+          {isOwner() && (
             <button
-              key={item.label}
-              onClick={() => onTabChange(item.label)}
-              className={`flex items-center w-full gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === item.label 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              onClick={() => onTabChange('Settings')}
+              className={`w-full px-4 py-3 flex items-center gap-3 rounded-xl text-xs font-bold transition-all active:scale-[0.98] mt-auto ${
+                activeTab === 'Settings'
+                  ? 'bg-primary/15 text-primary shadow-xs'
+                  : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground font-medium'
               }`}
             >
-              <item.icon className="w-5 h-5" />
-              {item.label}
+              <Settings className={`w-4 h-4 ${activeTab === 'Settings' ? 'text-primary' : 'text-muted-foreground'}`} />
+              Settings
             </button>
-          ))}
+          )}
         </nav>
-
-        <div className="p-4 border-t">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">{user?.display_name}</p>
-              <p className="text-xs text-muted-foreground">{user?.role}</p>
-            </div>
-            <button
-              onClick={logout}
-              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-muted/20 p-6">
+      {/* Main Content Canvas */}
+      <main className="flex-1 overflow-y-auto bg-background/50 p-6">
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

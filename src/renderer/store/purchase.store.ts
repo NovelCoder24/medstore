@@ -34,9 +34,10 @@ interface PurchaseState {
   invoiceDate: string // YYYY-MM-DD
   items: PurchaseLineItem[]
   manualGrandTotalPaise: number | null
+  entrySource: 'MANUAL' | 'OCR'
 
   // Actions
-  setInvoiceDetails: (vendorId: number, invoiceNumber: string, invoiceDate: string) => void
+  setInvoiceDetails: (vendorId: number, invoiceNumber: string, invoiceDate: string, entrySource?: 'MANUAL' | 'OCR') => void
   addItem: (product: any) => void
   updateItem: (id: string, updates: Partial<PurchaseLineItem>) => void
   removeItem: (id: string) => void
@@ -57,11 +58,12 @@ export const usePurchaseStore = create<PurchaseState>((set, get) => ({
   invoiceDate: new Date().toISOString().split('T')[0],
   items: [],
   manualGrandTotalPaise: null,
+  entrySource: 'MANUAL',
 
   setManualGrandTotal: (paise) => set({ manualGrandTotalPaise: paise }),
 
-  setInvoiceDetails: (vendorId, invoiceNumber, invoiceDate) => {
-    set({ vendorId, invoiceNumber, invoiceDate })
+  setInvoiceDetails: (vendorId, invoiceNumber, invoiceDate, entrySource) => {
+    set({ vendorId, invoiceNumber, invoiceDate, entrySource: entrySource || 'MANUAL' })
   },
 
   addItem: (product) => {
@@ -126,7 +128,8 @@ export const usePurchaseStore = create<PurchaseState>((set, get) => ({
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       items: [],
-      manualGrandTotalPaise: null
+      manualGrandTotalPaise: null,
+      entrySource: 'MANUAL'
     })
   },
 

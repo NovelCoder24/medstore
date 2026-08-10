@@ -9,6 +9,7 @@ export interface PurchasePayload {
   vendorId: number
   invoiceNumber: string
   invoiceDate: string // YYYY-MM-DD
+  source?: 'MANUAL' | 'OCR'
   totalAmountPaise: number
   items: PurchaseItemPayload[]
 }
@@ -26,6 +27,39 @@ export interface PurchaseItemPayload {
   totalPaise: number
 }
 
+export interface PurchaseInvoiceListItem {
+  id: number
+  vendor_id: number
+  vendor_name: string
+  vendor_gstin: string | null
+  invoice_number: string
+  invoice_date: string
+  source: 'MANUAL' | 'OCR'
+  total_amount_paise: number
+  item_count: number
+  verified_by_name: string | null
+  created_at: string
+}
+
+export interface PurchaseInvoiceDetails extends PurchaseInvoiceListItem {
+  items: Array<{
+    id: number
+    product_id: number
+    product_name: string
+    composition_name: string | null
+    schedule_flag: string | null
+    batch_number: string
+    expiry_date: string
+    quantity_packs: number
+    quantity_units: number
+    mrp_paise: number
+    purchase_rate_paise: number
+    net_rate_paise: number
+    gst_rate_pct: number
+    total_paise: number
+  }>
+}
+
 /**
  * Creates a new purchase invoice, updates/creates batches, and logs stock movements.
  * Everything runs inside a single SQLite transaction.
@@ -36,8 +70,8 @@ export function createPurchase(payload: PurchasePayload): number {
   // 1. Prepare statements
   const insertInvoice = db.prepare(`
     INSERT INTO purchase_invoices (
-      vendor_id, invoice_number, invoice_date, source, verification_status, verified_by, total_amount_paise
-    ) VALUES (?, ?, ?, 'MANUAL', 'VERIFIED', ?, ?)
+      vendor_id, invoice_number, invoice_date, source, verification_status, verified_by, total_amount_paise, created_at
+    ) VALUES (?, ?, ?, ?, 'VERIFIED', ?, ?, ?)
   `)
 
   const insertPurchaseItem = db.prepare(`
@@ -47,12 +81,13 @@ export function createPurchase(payload: PurchasePayload): number {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
-  // Upsert batch (if exact batch + expiry exists for this product, add to quantity. Otherwise create new)
-  // A pharmacy usually just accumulates stock into the exact same batch if it exists.
-
+  // Batch identity includes price points to handle DPCO price revisions.
+  // Same batch number with different MRP = separate stock lots (legally required).
   const findBatch = db.prepare(`
     SELECT id, quantity FROM batches 
     WHERE product_id = ? AND batch_number = ? AND expiry_date = ?
+      AND mrp_paise = ? AND purchase_rate_paise = ?
+      AND is_active = 1
   `)
 
   const insertBatch = db.prepare(`
@@ -62,14 +97,16 @@ export function createPurchase(payload: PurchasePayload): number {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
   `)
 
+  // Price overwrite is no longer needed since findBatch already matches on exact price.
+  // Only accumulate quantity for genuine re-orders of identical stock.
   const updateBatchQty = db.prepare(`
-    UPDATE batches SET quantity = quantity + ?, mrp_paise = ?, purchase_rate_paise = ? WHERE id = ?
+    UPDATE batches SET quantity = quantity + ? WHERE id = ?
   `)
 
   const insertMovement = db.prepare(`
     INSERT INTO stock_ledger (
       batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
-    ) VALUES (?, 'PURCHASE_IN', ?, ?, 'Manual Purchase Entry', ?)
+    ) VALUES (?, 'PURCHASE_IN', ?, ?, 'Purchase Entry', ?)
   `)
 
   // Server-side recalculation & validation of purchase totals
@@ -110,8 +147,10 @@ export function createPurchase(payload: PurchasePayload): number {
       payload.vendorId,
       payload.invoiceNumber,
       payload.invoiceDate,
+      payload.source || 'MANUAL',
       payload.userId,
-      finalInvoiceTotalPaise
+      finalInvoiceTotalPaise,
+      new Date().toISOString()
     )
     const invoiceId = invResult.lastInsertRowid as number
 
@@ -129,11 +168,13 @@ export function createPurchase(payload: PurchasePayload): number {
 
     // Process Items
     for (const item of payload.items) {
+      const normalizedBatchNumber = item.batchNumber.trim().toUpperCase()
+
       // Insert purchase item record
       const pItemResult = insertPurchaseItem.run(
         invoiceId,
         item.productId,
-        item.batchNumber,
+        normalizedBatchNumber,
         item.expiryDate,
         item.quantityPacks,
         item.quantityUnits,
@@ -148,22 +189,24 @@ export function createPurchase(payload: PurchasePayload): number {
       // Update or Create Batch
       const existingBatch = findBatch.get(
         item.productId,
-        item.batchNumber,
-        item.expiryDate
+        normalizedBatchNumber,
+        item.expiryDate,
+        item.mrpPaise,
+        item.purchaseRatePaise
       ) as { id: number, quantity: number } | undefined
 
       let batchId: number
 
       if (existingBatch) {
         batchId = existingBatch.id
-        // Accumulate quantity and update prices to the latest purchase rate
-        updateBatchQty.run(item.quantityUnits, item.mrpPaise, item.purchaseRatePaise, batchId)
+        // Accumulate quantity (prices already match since findBatch includes price in WHERE)
+        updateBatchQty.run(item.quantityUnits, batchId)
       } else {
         const batchResult = insertBatch.run(
           item.productId,
           payload.vendorId,
           purchaseItemId,
-          item.batchNumber,
+          normalizedBatchNumber,
           item.expiryDate,
           item.quantityUnits,
           item.mrpPaise,
@@ -186,6 +229,115 @@ export function createPurchase(payload: PurchasePayload): number {
   })
 
   return executePurchase()
+}
+
+export function listPurchaseInvoices(filters?: {
+  vendorId?: number
+  source?: 'MANUAL' | 'OCR'
+  startDate?: string
+  endDate?: string
+  search?: string
+}): PurchaseInvoiceListItem[] {
+  const db = getDatabase()
+  let sql = `
+    SELECT 
+      pi.id,
+      pi.vendor_id,
+      v.name as vendor_name,
+      v.gstin as vendor_gstin,
+      pi.invoice_number,
+      pi.invoice_date,
+      pi.source,
+      pi.total_amount_paise,
+      (SELECT COUNT(*) FROM purchase_items pit WHERE pit.purchase_invoice_id = pi.id) as item_count,
+      u.display_name as verified_by_name,
+      pi.created_at
+    FROM purchase_invoices pi
+    JOIN vendors v ON pi.vendor_id = v.id
+    LEFT JOIN users u ON pi.verified_by = u.id
+    WHERE 1=1
+  `
+  const params: any[] = []
+
+  if (filters?.vendorId) {
+    sql += ` AND pi.vendor_id = ?`
+    params.push(filters.vendorId)
+  }
+
+  if (filters?.source) {
+    sql += ` AND pi.source = ?`
+    params.push(filters.source)
+  }
+
+  if (filters?.startDate) {
+    sql += ` AND pi.invoice_date >= ?`
+    params.push(filters.startDate)
+  }
+
+  if (filters?.endDate) {
+    sql += ` AND pi.invoice_date <= ?`
+    params.push(filters.endDate)
+  }
+
+  if (filters?.search) {
+    sql += ` AND (pi.invoice_number LIKE ? OR v.name LIKE ?)`
+    params.push(`%${filters.search}%`, `%${filters.search}%`)
+  }
+
+  sql += ` ORDER BY pi.invoice_date DESC, pi.id DESC`
+
+  return db.prepare(sql).all(...params) as PurchaseInvoiceListItem[]
+}
+
+export function getPurchaseInvoiceDetails(invoiceId: number): PurchaseInvoiceDetails | null {
+  const db = getDatabase()
+  const invoice = db.prepare(`
+    SELECT 
+      pi.id,
+      pi.vendor_id,
+      v.name as vendor_name,
+      v.gstin as vendor_gstin,
+      pi.invoice_number,
+      pi.invoice_date,
+      pi.source,
+      pi.total_amount_paise,
+      (SELECT COUNT(*) FROM purchase_items pit WHERE pit.purchase_invoice_id = pi.id) as item_count,
+      u.display_name as verified_by_name,
+      pi.created_at
+    FROM purchase_invoices pi
+    JOIN vendors v ON pi.vendor_id = v.id
+    LEFT JOIN users u ON pi.verified_by = u.id
+    WHERE pi.id = ?
+  `).get(invoiceId) as PurchaseInvoiceListItem | undefined
+
+  if (!invoice) return null
+
+  const items = db.prepare(`
+    SELECT 
+      pit.id,
+      pit.product_id,
+      p.brand_name as product_name,
+      CASE WHEN c.id IS NOT NULL THEN (c.salt_name || ' ' || c.strength) ELSE NULL END as composition_name,
+      p.schedule_flag,
+      pit.batch_number,
+      pit.expiry_date,
+      pit.quantity_packs,
+      pit.quantity_units,
+      pit.mrp_paise,
+      pit.purchase_rate_paise,
+      pit.net_rate_paise,
+      pit.gst_rate_pct,
+      pit.total_paise
+    FROM purchase_items pit
+    JOIN products p ON pit.product_id = p.id
+    LEFT JOIN compositions c ON p.composition_id = c.id
+    WHERE pit.purchase_invoice_id = ?
+  `).all(invoiceId) as any[]
+
+  return {
+    ...invoice,
+    items
+  }
 }
 
 /**
@@ -257,6 +409,14 @@ export function registerPurchaseHandlers() {
     return createPurchase(payload)
   })
 
+  ipcMain.handle(IPC_CHANNELS.PURCHASES_LIST, (_, filters) => {
+    return listPurchaseInvoices(filters)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PURCHASES_GET, (_, id: number) => {
+    return getPurchaseInvoiceDetails(id)
+  })
+
   ipcMain.handle(IPC_CHANNELS.PURCHASES_APPROVE_OCR, (_, payload: {
     purchase: PurchasePayload
     rawExtraction: Record<string, unknown>
@@ -274,6 +434,7 @@ export function registerPurchaseHandlers() {
       }>
     }
   }) => {
+    payload.purchase.source = 'OCR'
     // 1. Commit the purchase — this is the critical path
     const invoiceId = createPurchase(payload.purchase)
 

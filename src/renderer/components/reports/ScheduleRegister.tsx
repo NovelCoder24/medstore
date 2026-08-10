@@ -35,7 +35,15 @@ export function ScheduleRegister() {
 
   const handlePrintPDF = async () => {
     if (!filteredData.length) return
-    const printHtml = generatePrintHtml()
+    let storeName = 'Pharmacy'
+    try {
+      const settings = await window.api.invoke(IPC_CHANNELS.SETTINGS_GET)
+      if (settings?.storeName) storeName = settings.storeName
+    } catch (e) {
+      console.warn('Failed to fetch settings for print header')
+    }
+
+    const printHtml = generatePrintHtml(storeName)
     try {
       await window.api.invoke(IPC_CHANNELS.PRINT_PDF, printHtml, `Schedule_Register_${startDate}_to_${endDate}.pdf`, {
         landscape: true,
@@ -47,7 +55,7 @@ export function ScheduleRegister() {
     }
   }
 
-  const generatePrintHtml = () => {
+  const generatePrintHtml = (storeName: string) => {
     const rowsHtml = filteredData.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
@@ -59,6 +67,7 @@ export function ScheduleRegister() {
         <td>${r.expiry_date}</td>
         <td>${r.pack_size > 1 ? `${r.qty_sold} (${Math.floor(r.qty_sold / r.pack_size)}x${r.pack_size})` : r.qty_sold}</td>
         <td>${r.patient_name}</td>
+        <td>${r.patient_address || ''}</td>
         <td>${r.doctor_name}</td>
         <td>${r.doctor_reg_no}</td>
       </tr>
@@ -79,23 +88,24 @@ export function ScheduleRegister() {
           th, td { border: 1px solid #ccc; padding: 4px; text-align: left; word-wrap: break-word; }
           th { background: #f3f4f6; font-weight: bold; }
           /* Proportional Column Widths */
-          th:nth-child(1) { width: 4%; }  /* S.No */
+          th:nth-child(1) { width: 3%; }  /* S.No */
           th:nth-child(2) { width: 8%; }  /* Date */
           th:nth-child(3) { width: 8%; }  /* Bill No */
-          th:nth-child(4) { width: 5%; }  /* Sch */
-          th:nth-child(5) { width: 15%; } /* Drug */
-          th:nth-child(6) { width: 10%; } /* Batch */
+          th:nth-child(4) { width: 4%; }  /* Sch */
+          th:nth-child(5) { width: 14%; } /* Drug */
+          th:nth-child(6) { width: 9%; }  /* Batch */
           th:nth-child(7) { width: 7%; }  /* Expiry */
-          th:nth-child(8) { width: 8%; }  /* Qty */
-          th:nth-child(9) { width: 12%; } /* Patient */
-          th:nth-child(10) { width: 12%; }/* Doctor */
-          th:nth-child(11) { width: 11%; }/* Reg No */
+          th:nth-child(8) { width: 7%; }  /* Qty */
+          th:nth-child(9) { width: 10%; } /* Patient */
+          th:nth-child(10) { width: 10%; }/* Address */
+          th:nth-child(11) { width: 10%; }/* Doctor */
+          th:nth-child(12) { width: 10%; }/* Reg No */
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>Pharmacy</h1>
-          <p>Schedule H/H1/X Drug Register</p>
+          <h1>${storeName}</h1>
+          <p>Schedule H1/X Drug Register</p>
           <p>From: ${startDate} To: ${endDate}</p>
         </div>
         <table>
@@ -110,6 +120,7 @@ export function ScheduleRegister() {
               <th>Expiry</th>
               <th>Qty</th>
               <th>Patient</th>
+              <th>Address</th>
               <th>Doctor Name</th>
               <th>Reg No</th>
             </tr>
@@ -123,7 +134,6 @@ export function ScheduleRegister() {
     `
   }
 
-  const hCount = filteredData.filter(d => d.schedule_flag === 'H').length
   const h1Count = filteredData.filter(d => d.schedule_flag === 'H1').length
   const xCount = filteredData.filter(d => d.schedule_flag === 'X').length
 
@@ -133,9 +143,9 @@ export function ScheduleRegister() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-blue-600" />
-            Schedule H/H1/X Drug Register
+            Schedule H1/X Drug Register
           </h1>
-          <p className="text-sm text-gray-500 mt-1">As required under Rule 65, Drugs and Cosmetics Rules</p>
+          <p className="text-sm text-gray-500 mt-1">As required under Rule 65(3), Drugs and Cosmetics Rules</p>
         </div>
         
         <div className="flex items-center gap-4">
@@ -161,7 +171,6 @@ export function ScheduleRegister() {
             className="px-3 py-1.5 border rounded-lg text-sm"
           >
             <option value="ALL">All Schedules</option>
-            <option value="H">Schedule H</option>
             <option value="H1">Schedule H1</option>
             <option value="X">Schedule X</option>
           </select>
@@ -192,7 +201,7 @@ export function ScheduleRegister() {
           {isLoading ? (
             <div className="p-8 text-center text-gray-500">Loading register data...</div>
           ) : filteredData.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No Schedule H/H1/X drug sales found for this period.</div>
+            <div className="p-8 text-center text-gray-500">No Schedule H1/X drug sales found for this period.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -206,6 +215,7 @@ export function ScheduleRegister() {
                     <th className="px-4 py-3">Batch</th>
                     <th className="px-4 py-3">Qty</th>
                     <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Address</th>
                     <th className="px-4 py-3">Doctor</th>
                     <th className="px-4 py-3">Reg No</th>
                   </tr>
@@ -236,6 +246,7 @@ export function ScheduleRegister() {
                         <div>{item.patient_name}</div>
                         {item.patient_phone && <div className="text-xs text-gray-500">{item.patient_phone}</div>}
                       </td>
+                      <td className="px-4 py-3 text-gray-700">{item.patient_address || '-'}</td>
                       <td className="px-4 py-3">{item.doctor_name}</td>
                       <td className="px-4 py-3 text-gray-500">{item.doctor_reg_no}</td>
                     </tr>
@@ -249,10 +260,9 @@ export function ScheduleRegister() {
 
       <div className="bg-white border-t px-6 py-3 flex justify-between items-center text-sm text-gray-600">
         <div>Total Entries: <span className="font-semibold text-gray-900">{filteredData.length}</span></div>
-        <div className="flex gap-4">
-          <div>H: <span className="font-semibold text-gray-900">{hCount}</span></div>
-          <div>H1: <span className="font-semibold text-gray-900">{h1Count}</span></div>
-          <div>X: <span className="font-semibold text-gray-900">{xCount}</span></div>
+        <div className="flex gap-6">
+          <div>Schedule H1: <span className="font-semibold text-gray-900">{h1Count}</span></div>
+          <div>Schedule X: <span className="font-semibold text-gray-900">{xCount}</span></div>
         </div>
       </div>
     </div>

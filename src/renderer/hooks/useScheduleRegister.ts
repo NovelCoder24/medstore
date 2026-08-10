@@ -14,6 +14,7 @@ export interface ScheduleRegisterEntry {
   pack_size: number
   patient_name: string
   patient_phone: string
+  patient_address: string
   doctor_name: string
   doctor_reg_no: string
   sold_by: string

@@ -1,95 +1,124 @@
 import React from 'react'
 import { useExpiryAlerts } from '../../hooks/useAnalytics'
-import { AlertTriangle, Loader2, CheckCircle2 } from 'lucide-react'
+import { CalendarX, Loader2, CheckCircle2 } from 'lucide-react'
 
 export function ExpiryAlerts() {
   const { data: alerts, isLoading, error } = useExpiryAlerts()
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-12 text-muted-foreground border rounded-lg bg-card shadow-sm">
-        <Loader2 className="w-8 h-8 animate-spin" />
+      <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+          <h3 className="font-semibold text-base flex items-center gap-2 text-foreground">
+            <CalendarX className="w-5 h-5 text-red-500" />
+            Expiry Alerts
+          </h3>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-8 text-muted-foreground">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
       </div>
     )
   }
 
   if (error) {
-    return <div className="p-4 text-red-500 bg-red-50 rounded-lg">Failed to load expiry alerts</div>
-  }
-
-  if (!alerts || alerts.length === 0) {
     return (
-      <div className="p-8 text-center bg-card border rounded-lg shadow-sm">
-        <div className="mx-auto w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
-          <CheckCircle2 className="w-6 h-6" />
-        </div>
-        <h3 className="text-lg font-medium">All Clear!</h3>
-        <p className="text-muted-foreground text-sm">No batches are expiring in the next 6 months.</p>
+      <div className="p-4 text-xs font-semibold text-red-500 bg-red-500/10 rounded-xl border border-red-500/20">
+        Failed to load expiry alerts.
       </div>
     )
   }
 
-  // Group alerts by severity
-  const redAlerts = alerts.filter(a => a.daysUntilExpiry <= 30) // Expiring this month
-  const yellowAlerts = alerts.filter(a => a.daysUntilExpiry > 30 && a.daysUntilExpiry <= 90) // Next 3 months
-  const upcomingAlerts = alerts.filter(a => a.daysUntilExpiry > 90) // 3-6 months
-
-  const renderTable = (items: typeof alerts, type: 'red' | 'yellow' | 'upcoming') => {
-    if (items.length === 0) return null
-
-    const colors = {
-      red: 'bg-red-50 border-red-200 text-red-700',
-      yellow: 'bg-orange-50 border-orange-200 text-orange-800',
-      upcoming: 'bg-blue-50 border-blue-200 text-blue-800'
-    }
-
-    const title = {
-      red: 'Critical - Expiring in < 30 Days',
-      yellow: 'Warning - Expiring in 1-3 Months',
-      upcoming: 'Notice - Expiring in 3-6 Months'
-    }
-
+  if (!alerts || alerts.length === 0) {
     return (
-      <div className={`border rounded-lg mb-6 overflow-hidden ${colors[type]}`}>
-        <div className="px-4 py-2 font-semibold border-b bg-white/50 backdrop-blur-sm">
-          {title[type]} ({items.length})
+      <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col h-full overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30">
+          <h3 className="font-semibold text-base flex items-center gap-2 text-foreground">
+            <CalendarX className="w-5 h-5 text-red-500" />
+            Expiry Alerts
+          </h3>
         </div>
-        <table className="w-full text-sm text-left bg-white">
-          <thead className="bg-muted/30 text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 font-medium">Product</th>
-              <th className="px-4 py-2 font-medium">Batch</th>
-              <th className="px-4 py-2 font-medium text-center">Exp</th>
-              <th className="px-4 py-2 font-medium text-right">Qty Left</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {items.map(item => (
-              <tr key={item.batchId} className="hover:bg-muted/10">
-                <td className="px-4 py-2 font-medium">{item.brandName}</td>
-                <td className="px-4 py-2">{item.batchNumber}</td>
-                <td className="px-4 py-2 text-center font-medium">
-                  {item.expiryDate ? `${item.expiryDate.slice(5, 7)}/${item.expiryDate.slice(0, 4)}` : 'N/A'}
-                </td>
-                <td className="px-4 py-2 text-right">{item.quantity} units</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="p-8 text-center flex-1 flex flex-col items-center justify-center">
+          <div className="w-12 h-12 bg-emerald-500/10 text-emerald-600 rounded-full flex items-center justify-center mb-3">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <h4 className="font-bold text-sm text-foreground">All Clear!</h4>
+          <p className="text-muted-foreground text-xs mt-1">No medicine batches expiring in the next 6 months.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-card border rounded-lg shadow-sm">
-      <div className="p-4 border-b flex items-center gap-2">
-        <AlertTriangle className="w-5 h-5 text-red-500" />
-        <h3 className="font-semibold text-lg">Expiry Dashboard</h3>
+    <div className="bg-card border border-border rounded-xl shadow-sm flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
+        <h3 className="font-semibold text-base flex items-center gap-2 text-foreground">
+          <CalendarX className="w-5 h-5 text-red-500" />
+          Expiry Alerts
+        </h3>
+        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-500/10 text-red-600 border border-red-500/20">
+          {alerts.length} Items
+        </span>
       </div>
-      <div className="p-4 overflow-auto max-h-[600px]">
-        {renderTable(redAlerts, 'red')}
-        {renderTable(yellowAlerts, 'yellow')}
-        {renderTable(upcomingAlerts, 'upcoming')}
+
+      {/* Alert Items List */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[500px]">
+        {alerts.map((item) => {
+          const isCritical = item.daysUntilExpiry <= 30
+          const isWarning = item.daysUntilExpiry > 30 && item.daysUntilExpiry <= 90
+
+          const severityClass = isCritical
+            ? 'border-red-500/30 bg-red-500/5'
+            : isWarning
+              ? 'border-amber-500/30 bg-amber-500/5'
+              : 'border-blue-500/30 bg-blue-500/5'
+
+          const badgeClass = isCritical
+            ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+            : isWarning
+              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+              : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+
+          const badgeText = isCritical ? 'CRITICAL' : isWarning ? 'WARNING' : 'NOTICE'
+
+          const formattedExpDate = item.expiryDate
+            ? `${item.expiryDate.slice(5, 7)}/${item.expiryDate.slice(0, 4)}`
+            : 'N/A'
+
+          return (
+            <div
+              key={item.batchId}
+              className={`p-3 border rounded-lg transition-all flex flex-col gap-1.5 ${severityClass}`}
+            >
+              <div className="flex justify-between items-start gap-2">
+                <h4 className="font-bold text-xs text-foreground tracking-tight line-clamp-1">
+                  {item.brandName}
+                </h4>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${badgeClass}`}>
+                  {badgeText}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-2 text-xs text-muted-foreground mt-0.5">
+                <div>
+                  <span className="font-medium text-muted-foreground/70">Batch:</span>{' '}
+                  <span className="font-mono font-semibold text-foreground">{item.batchNumber}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground/70">Qty:</span>{' '}
+                  <span className="font-bold text-foreground">{item.quantity} units</span>
+                </div>
+                <div className="col-span-2 mt-1">
+                  <span className="font-medium text-muted-foreground/70">Exp:</span>{' '}
+                  <span className={`font-bold ${isCritical ? 'text-red-600' : isWarning ? 'text-amber-600' : 'text-blue-600'}`}>
+                    {formattedExpDate} ({item.daysUntilExpiry <= 0 ? 'EXPIRED' : `${item.daysUntilExpiry} days left`})
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

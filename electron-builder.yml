@@ -1,5 +1,9 @@
 appId: com.medstore
 productName: MedStore
+publish:
+  provider: github
+  owner: NovelCoder24
+  repo: medstore
 directories:
   buildResources: build
 files:

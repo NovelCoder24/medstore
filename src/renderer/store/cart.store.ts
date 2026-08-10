@@ -30,6 +30,7 @@ export interface CartLineItem {
 export interface PatientDetails {
   name: string
   phone: string
+  address: string
   doctorName: string
   doctorRegNo: string
 }
@@ -56,7 +57,7 @@ interface CartState {
   }
 }
 
-const emptyPatient = { name: '', phone: '', doctorName: '', doctorRegNo: '' }
+const emptyPatient: PatientDetails = { name: '', phone: '', address: '', doctorName: '', doctorRegNo: '' }
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],

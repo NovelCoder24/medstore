@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePurchaseStore } from '../../store/purchase.store'
 import { useVendors } from '../../hooks/useVendors'
@@ -6,8 +6,9 @@ import { PurchaseGrid } from './PurchaseGrid'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { useAuthStore } from '../../store/auth.store'
 import { formatPaise, toPaise } from '../../../shared/utils/paise'
-import { FileDown, FileCheck2, Loader2, Save, ScanLine } from 'lucide-react'
+import { FileDown, FileCheck2, Loader2, Save, ScanLine, History as HistoryIcon, ClipboardPaste } from 'lucide-react'
 import type { OcrExtractionResult } from '../../../shared/types'
+import { PurchaseHistory } from './PurchaseHistory'
 
 function extractPackSize(packText: string | null | undefined): number {
   if (!packText) return 1
@@ -40,23 +41,29 @@ function extractPackSize(packText: string | null | undefined): number {
 export function PurchaseForm() {
   const queryClient = useQueryClient()
   const {
-    vendorId, invoiceNumber, invoiceDate, items,
+    vendorId, invoiceNumber, invoiceDate, items, entrySource,
     setInvoiceDetails, getTotals, clearPurchase, addItem, updateItem, setManualGrandTotal
   } = usePurchaseStore()
 
   const { user } = useAuthStore()
   const { data: vendors, isLoading: isLoadingVendors } = useVendors()
 
+  const [activeTab, setActiveTab] = useState<'ENTRY' | 'HISTORY'>('ENTRY')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 7000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
+
   const totals = getTotals()
 
-  const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const processOcrFile = async (file: File) => {
 
     const arrayBuffer = await file.arrayBuffer()
     const mimeType = file.type
@@ -117,7 +124,8 @@ export function PurchaseForm() {
       setInvoiceDetails(
         matchedVendorId || 0,
         result.invoiceNumber || invoiceNumber,
-        result.invoiceDate || invoiceDate
+        result.invoiceDate || invoiceDate,
+        'OCR'
       )
 
       // We need to resolve product IDs from the extracted product names.
@@ -184,10 +192,39 @@ export function PurchaseForm() {
       }
     } finally {
       setIsScanning(false)
-      // Reset input so the same file can be selected again
-      e.target.value = ''
+      // We do not reset the input here because this function is now generic for both file input and paste.
     }
   }
+
+  const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processOcrFile(file)
+    e.target.value = '' // Reset input so same file can be selected again
+  }
+
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      if (activeTab !== 'ENTRY' || isScanning) return
+
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile()
+          if (file) {
+            e.preventDefault()
+            await processOcrFile(file)
+            break // Only process the first image found in clipboard
+          }
+        }
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [activeTab, isScanning])
 
   const handleSave = async () => {
     if (!vendorId || !invoiceNumber || items.length === 0 || !user) {
@@ -243,6 +280,7 @@ export function PurchaseForm() {
         vendorId,
         invoiceNumber,
         invoiceDate,
+        source: entrySource,
         totalAmountPaise: totals.grandTotalPaise,
         items: resolvedItems.map(item => {
           // Convert month/year to YYYY-MM-DD (last day of month)
@@ -270,19 +308,26 @@ export function PurchaseForm() {
 
       await window.api.invoke(IPC_CHANNELS.PURCHASES_CREATE, payload)
 
-      // Invalidate queries so inventory lists update immediately
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      queryClient.invalidateQueries({ queryKey: ['productBatches'] })
-      queryClient.invalidateQueries({ queryKey: ['vendors'] })
+      // Invalidate queries so inventory lists and invoice history update immediately
+      await queryClient.invalidateQueries({ queryKey: ['products'] })
+      await queryClient.invalidateQueries({ queryKey: ['productBatches'] })
+      await queryClient.invalidateQueries({ queryKey: ['vendors'] })
+      await queryClient.invalidateQueries({ queryKey: ['purchaseInvoices'] })
 
       setSuccess(true)
       setTimeout(() => {
         setSuccess(false)
         clearPurchase()
-      }, 2000)
+        setActiveTab('HISTORY')
+      }, 1200)
 
     } catch (err: any) {
-      setError(err.message || 'Failed to save purchase')
+      const msg = err.message || ''
+      if (msg.includes('already exists')) {
+        setError(`Duplicate Invoice: Invoice #${invoiceNumber} from this supplier is already in your database. Switch to "Past Purchase Invoices" to view it.`)
+      } else {
+        setError(msg || 'Failed to save purchase')
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -290,39 +335,80 @@ export function PurchaseForm() {
 
   return (
     <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileDown className="w-6 h-6 text-primary" />
-          <h2 className="text-2xl font-bold tracking-tight">Purchase Entry</h2>
+      {/* Top Header & Tab Switcher */}
+      <div className="flex items-center justify-between border-b pb-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <FileDown className="w-6 h-6 text-primary" />
+            <h2 className="text-2xl font-bold tracking-tight">Stock Purchases</h2>
+          </div>
+
+          <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
+            <button
+              onClick={() => setActiveTab('ENTRY')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'ENTRY'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <ScanLine className="w-4 h-4" />
+              Inward Stock & AI Scan
+            </button>
+            <button
+              onClick={() => setActiveTab('HISTORY')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                activeTab === 'HISTORY'
+                  ? 'bg-background text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <HistoryIcon className="w-4 h-4" />
+              Past Purchase Invoices
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <label className="flex items-center gap-2 px-4 py-2 font-medium text-primary bg-primary/10 transition-colors rounded-md hover:bg-primary/20 cursor-pointer disabled:opacity-50">
-            {isScanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <ScanLine className="w-5 h-5" />}
-            {isScanning ? 'Scanning...' : 'Scan Bill with AI'}
-            <input
-              type="file"
-              className="hidden"
-              accept="image/*,application/pdf"
-              onChange={handleOcrUpload}
-              disabled={isScanning}
-            />
-          </label>
-          <button
-            onClick={handleSave}
-            disabled={isSubmitting || items.length === 0}
-            className="flex items-center gap-2 px-6 py-2 font-medium text-white transition-colors bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-            Save Invoice
-          </button>
-        </div>
+
+        {activeTab === 'ENTRY' && (
+          <div className="flex gap-2">
+            <label className="flex items-center gap-2 px-4 py-2 font-medium text-primary bg-primary/10 transition-colors rounded-md hover:bg-primary/20 cursor-pointer disabled:opacity-50">
+              {isScanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <ScanLine className="w-5 h-5" />}
+              {isScanning ? 'Scanning...' : 'Scan Bill with AI'}
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*,application/pdf"
+                onChange={handleOcrUpload}
+                disabled={isScanning}
+              />
+            </label>
+            <div className="flex items-center text-xs text-muted-foreground px-2 font-medium" title="Copy an image from WhatsApp Web and press Ctrl+V anywhere in this form!">
+              <ClipboardPaste className="w-4 h-4 mr-1" />
+              or Ctrl+V to paste
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={isSubmitting || items.length === 0}
+              className="flex items-center gap-2 px-6 py-2 font-medium text-white transition-colors bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              Save Invoice
+            </button>
+          </div>
+        )}
       </div>
 
-      {error && (
-        <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md border border-red-200">
-          {error}
+      {activeTab === 'HISTORY' ? (
+        <div className="flex-1 overflow-auto">
+          <PurchaseHistory />
         </div>
-      )}
+      ) : (
+        <>
+          {error && (
+            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md border border-red-200">
+              {error}
+            </div>
+          )}
 
       {success && (
         <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md border border-green-200 flex items-center gap-2">
@@ -405,6 +491,8 @@ export function PurchaseForm() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   )
 }

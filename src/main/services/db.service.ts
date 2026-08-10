@@ -56,6 +56,7 @@ export function initDatabase(): void {
   db.pragma('foreign_keys = ON')
   db.pragma('busy_timeout = 5000')
   db.pragma('cache_size = -64000') // 64MB page cache
+  db.pragma('wal_autocheckpoint = 1000') // Auto-checkpoint when WAL reaches ~4MB (1000 pages)
 
   console.log(`[DB] Opened database at ${dbPath}`)
 

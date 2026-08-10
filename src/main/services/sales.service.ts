@@ -8,6 +8,7 @@ export interface SalePayload {
   userId: number
   patientName: string | null
   patientPhone: string | null
+  customerAddress?: string | null
   doctorName: string | null
   doctorRegNo: string | null
   paymentMode: 'CASH' | 'UPI' | 'CARD' | 'CREDIT'
@@ -76,9 +77,9 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
 
   const insertSale = db.prepare(`
     INSERT INTO sales (
-      bill_number, cashier_id, payment_mode, customer_name, customer_mobile, doctor_name, doctor_reg_no,
+      bill_number, cashier_id, payment_mode, customer_name, customer_mobile, customer_address, doctor_name, doctor_reg_no,
       subtotal_paise, discount_paise, cgst_paise, sgst_paise, igst_paise, total_paise, customer_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   const insertSaleItem = db.prepare(`
@@ -148,6 +149,7 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
       payload.paymentMode,
       payload.patientName || null,
       payload.patientPhone || null,
+      payload.customerAddress || null,
       payload.doctorName || null,
       payload.doctorRegNo || null,
       aggregateTotals.taxableValuePaise,
@@ -453,6 +455,7 @@ export function getSaleForReceipt(saleId: number) {
     billNumber: saleRow.bill_number,
     patientName: saleRow.customer_name,
     patientPhone: saleRow.customer_mobile,
+    patientAddress: saleRow.customer_address,
     doctorName: saleRow.doctor_name,
     doctorRegNo: saleRow.doctor_reg_no,
     paymentMode: saleRow.payment_mode,

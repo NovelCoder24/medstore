@@ -24,6 +24,7 @@ try {
       p.pack_size,
       COALESCE(s.customer_name, 'Walk-in')   AS patient_name,
       s.customer_mobile  AS patient_phone,
+      s.customer_address AS patient_address,
       COALESCE(s.doctor_name, 'Not Provided')   AS doctor_name,
       COALESCE(s.doctor_reg_no, 'Not Provided') AS doctor_reg_no,
       u.display_name     AS sold_by
@@ -33,7 +34,7 @@ try {
     JOIN batches b       ON si.batch_id = b.id
     JOIN users u         ON s.cashier_id = u.id
     LEFT JOIN compositions c ON p.composition_id = c.id
-    WHERE p.schedule_flag IN ('H', 'H1', 'X')
+    WHERE p.schedule_flag IN ('H1', 'X')
       AND s.created_at >= ?
       AND s.created_at <= ?
     ORDER BY s.created_at ASC
@@ -45,7 +46,7 @@ try {
   const csvHeaders = [
     'S.No', 'Date', 'Bill No', 'Schedule', 'Drug Name', 'Composition', 
     'Batch No', 'Expiry', 'Qty', 'Patient Name', 'Patient Phone', 
-    'Doctor Name', 'Doctor Reg No', 'Sold By'
+    'Patient Address', 'Doctor Name', 'Doctor Reg No', 'Sold By'
   ]
 
   const csvRows = rows.map((r, i) => {
@@ -68,6 +69,7 @@ try {
       qtyDisplay,
       r.patient_name,
       r.patient_phone || '',
+      r.patient_address || '',
       r.doctor_name,
       r.doctor_reg_no,
       r.sold_by
