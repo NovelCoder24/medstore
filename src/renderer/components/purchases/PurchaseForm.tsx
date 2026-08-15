@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePurchaseStore } from '../../store/purchase.store'
 import { useVendors } from '../../hooks/useVendors'
@@ -53,6 +53,8 @@ export function PurchaseForm() {
   const [isScanning, setIsScanning] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const abortOcrRef = useRef(false)
 
   useEffect(() => {
     if (error) {
@@ -70,9 +72,15 @@ export function PurchaseForm() {
 
     setIsScanning(true)
     setError(null)
+    abortOcrRef.current = false
 
     try {
       const result: OcrExtractionResult = await window.api.invoke(IPC_CHANNELS.OCR_EXTRACT, { buffer: arrayBuffer, mimeType })
+      
+      if (abortOcrRef.current) {
+        setIsScanning(false)
+        return // User cancelled
+      }
 
       // Try to auto-match vendor by GSTIN first, then by name
       let matchedVendor: any = null
@@ -183,17 +191,21 @@ export function PurchaseForm() {
       }
 
     } catch (err: any) {
-      // If it's the timeout error we explicitly threw, use its message
+      if (abortOcrRef.current) return // Skip showing error if cancelled manually
+      
       const msg = err.message || 'Unknown error'
-      if (msg.includes('timed out')) {
-        setError(msg)
-      } else {
-        setError(`OCR Failed: ${msg}. Please proceed with manual entry.`)
-      }
+      // The backend now provides clear error messages for timeouts and API errors
+      setError(msg)
     } finally {
       setIsScanning(false)
+      abortOcrRef.current = false
       // We do not reset the input here because this function is now generic for both file input and paste.
     }
+  }
+
+  const handleCancelOcr = () => {
+    abortOcrRef.current = true
+    setIsScanning(false)
   }
 
   const handleOcrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -368,6 +380,33 @@ export function PurchaseForm() {
             </button>
           </div>
         </div>
+
+        {isScanning && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-background border rounded-xl shadow-2xl w-[400px] overflow-hidden zoom-in-95 animate-in">
+              <div className="p-8 text-center space-y-5">
+                <div className="flex justify-center">
+                  <div className="p-5 bg-primary/10 rounded-full animate-pulse shadow-inner relative">
+                    <div className="absolute inset-0 rounded-full border border-primary/30 animate-ping"></div>
+                    <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold">Scanning Invoice...</h3>
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">Please wait while our AI extracts products, batches, and prices. This usually takes 5-10 seconds.</p>
+                </div>
+              </div>
+              <div className="bg-muted/50 p-4 flex justify-center border-t">
+                <button
+                  onClick={handleCancelOcr}
+                  className="px-6 py-2 text-sm font-medium bg-background border shadow-sm rounded-full hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors focus:ring-2 focus:ring-destructive/50 outline-none"
+                >
+                  Cancel Scanning
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'ENTRY' && (
           <div className="flex gap-2">

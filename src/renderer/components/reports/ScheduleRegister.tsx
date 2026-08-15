@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { ClipboardList, Download, Printer } from 'lucide-react'
+import { ClipboardList, Download, Printer, ShieldAlert, FileText, Calendar, Filter, Loader2 } from 'lucide-react'
 import { useScheduleRegister } from '../../hooks/useScheduleRegister'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 
@@ -49,7 +49,6 @@ export function ScheduleRegister() {
         landscape: true,
         margins: { marginType: 'minimum' }
       })
-      // Open path would usually be handled here or inside print service
     } catch (err) {
       console.error('Failed to generate PDF:', err)
     }
@@ -87,7 +86,6 @@ export function ScheduleRegister() {
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           th, td { border: 1px solid #ccc; padding: 4px; text-align: left; word-wrap: break-word; }
           th { background: #f3f4f6; font-weight: bold; }
-          /* Proportional Column Widths */
           th:nth-child(1) { width: 3%; }  /* S.No */
           th:nth-child(2) { width: 8%; }  /* Date */
           th:nth-child(3) { width: 8%; }  /* Bill No */
@@ -138,133 +136,161 @@ export function ScheduleRegister() {
   const xCount = filteredData.filter(d => d.schedule_flag === 'X').length
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Compliance Hero Banner */}
+      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 rounded-2xl text-white shadow-md flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 flex items-center gap-2">
-            <ClipboardList className="w-6 h-6 text-blue-600" />
-            Schedule H1/X Drug Register
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">As required under Rule 65(3), Drugs and Cosmetics Rules</p>
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-red-500 text-white rounded tracking-wide">
+              MANDATORY COMPLIANCE
+            </span>
+            <h2 className="text-xl font-bold tracking-tight">Schedule H / H1 & Narcotic Drug Register</h2>
+          </div>
+          <p className="text-xs text-slate-300 mt-1">
+            Official pharmaceutical audit trail for prescription-only and habit-forming drugs as required under Rule 65(3), Drugs & Cosmetics Act.
+          </p>
         </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleExportCSV}
+            disabled={!filteredData.length}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+          <button 
+            onClick={handlePrintPDF}
+            disabled={!filteredData.length}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-sm shadow-blue-500/20 transition disabled:opacity-50"
+          >
+            <Printer className="w-4 h-4" />
+            Export Regulatory PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Bar Card */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold">Date Range:</span>
             <input 
               type="date" 
               value={startDate} 
               onChange={e => setStartDate(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
-            <span className="text-gray-500">to</span>
+            <span className="text-slate-400">to</span>
             <input 
               type="date" 
               value={endDate} 
               onChange={e => setEndDate(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg text-sm"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
-          <select 
-            value={scheduleFilter} 
-            onChange={e => setScheduleFilter(e.target.value)}
-            className="px-3 py-1.5 border rounded-lg text-sm"
-          >
-            <option value="ALL">All Schedules</option>
-            <option value="H1">Schedule H1</option>
-            <option value="X">Schedule X</option>
-          </select>
-
-          <div className="flex gap-2 ml-4">
-            <button 
-              onClick={handleExportCSV}
-              disabled={!filteredData.length}
-              className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50"
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-semibold">Schedule Filter:</span>
+            <select 
+              value={scheduleFilter} 
+              onChange={e => setScheduleFilter(e.target.value)}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </button>
-            <button 
-              onClick={handlePrintPDF}
-              disabled={!filteredData.length}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50"
-            >
-              <Printer className="w-4 h-4" />
-              Print / PDF
-            </button>
+              <option value="ALL">All Schedules (H1 / X / H)</option>
+              <option value="H1">Schedule H1 Only</option>
+              <option value="X">Schedule X (Narcotics) Only</option>
+              <option value="H">Schedule H</option>
+            </select>
           </div>
         </div>
+
+        <div className="flex items-center gap-4 text-xs font-semibold text-slate-600">
+          <div>Schedule H1: <span className="font-bold text-red-600">{h1Count}</span></div>
+          <div>Schedule X: <span className="font-bold text-rose-700">{xCount}</span></div>
+          <div className="pl-3 border-l border-slate-200">Total Records: <span className="font-bold text-slate-900">{filteredData.length}</span></div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="bg-white border rounded-lg shadow-sm">
-          {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Loading register data...</div>
-          ) : filteredData.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No Schedule H1/X drug sales found for this period.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-4 py-3">S.No</th>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Bill No</th>
-                    <th className="px-4 py-3">Sch</th>
-                    <th className="px-4 py-3">Drug Name</th>
-                    <th className="px-4 py-3">Batch</th>
-                    <th className="px-4 py-3">Qty</th>
-                    <th className="px-4 py-3">Patient</th>
-                    <th className="px-4 py-3">Address</th>
-                    <th className="px-4 py-3">Doctor</th>
-                    <th className="px-4 py-3">Reg No</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map((item, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{index + 1}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{item.sale_date.split('T')[0]}</td>
-                      <td className="px-4 py-3 font-medium">{item.bill_number}</td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs font-semibold">
-                          {item.schedule_flag}
+      {/* Regulatory Compliance Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs overflow-hidden">
+        {isLoading ? (
+          <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <span className="text-xs font-medium">Querying regulatory register...</span>
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 text-xs">
+            <ClipboardList className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+            <p className="font-semibold text-sm text-slate-700">No Scheduled Drug Dispensed</p>
+            <p className="text-xs text-slate-400 mt-1">No Schedule H1, H, or X sales recorded in the selected period.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                  <th className="py-3 px-3">Date & Time</th>
+                  <th className="py-3 px-3">Bill No</th>
+                  <th className="py-3 px-3">Schedule Tag</th>
+                  <th className="py-3 px-3">Prescribed Drug</th>
+                  <th className="py-3 px-3">Batch & Exp</th>
+                  <th className="py-3 px-3 text-right">Qty Dispensed</th>
+                  <th className="py-3 px-3">Patient Details</th>
+                  <th className="py-3 px-3">Doctor & Reg #</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredData.map((item, index) => {
+                  const isSchX = item.schedule_flag === 'X'
+                  const isSchH1 = item.schedule_flag === 'H1'
+                  return (
+                    <tr key={index} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-3 text-slate-500 font-mono">{item.sale_date?.split('T')[0] || '-'}</td>
+                      <td className="py-3 px-3 font-bold text-slate-900 font-mono">{item.bill_number}</td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          isSchX 
+                            ? 'bg-rose-100 text-rose-800 border-rose-300' 
+                            : isSchH1 
+                            ? 'bg-red-100 text-red-800 border-red-300' 
+                            : 'bg-amber-100 text-amber-800 border-amber-300'
+                        }`}>
+                          Schedule {item.schedule_flag}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{item.drug_name}</div>
-                        {item.composition && <div className="text-xs text-gray-500 truncate max-w-[200px]" title={item.composition}>{item.composition}</div>}
+                      <td className="py-3 px-3">
+                        <div className="font-bold text-slate-900">{item.drug_name}</div>
+                        {item.composition && (
+                          <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={item.composition}>
+                            {item.composition}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
-                        <div>{item.batch_number}</div>
-                        <div className="text-xs text-gray-500">Exp: {item.expiry_date}</div>
+                      <td className="py-3 px-3 font-mono">
+                        <div className="text-slate-800 font-semibold">{item.batch_number}</div>
+                        <div className="text-[10px] text-slate-400">Exp: {item.expiry_date}</div>
                       </td>
-                      <td className="px-4 py-3 font-medium">
-                        {item.pack_size > 1 ? `${item.qty_sold} (${Math.floor(item.qty_sold / item.pack_size)}x${item.pack_size})` : item.qty_sold}
+                      <td className="py-3 px-3 text-right font-bold text-slate-900">
+                        {item.pack_size > 1 ? `${item.qty_sold} units (${Math.floor(item.qty_sold / item.pack_size)}p)` : `${item.qty_sold} units`}
                       </td>
-                      <td className="px-4 py-3">
-                        <div>{item.patient_name}</div>
-                        {item.patient_phone && <div className="text-xs text-gray-500">{item.patient_phone}</div>}
+                      <td className="py-3 px-3">
+                        <div className="font-bold text-slate-900">{item.patient_name}</div>
+                        <div className="text-[10px] text-slate-500">{item.patient_address || 'Address on file'}</div>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{item.patient_address || '-'}</td>
-                      <td className="px-4 py-3">{item.doctor_name}</td>
-                      <td className="px-4 py-3 text-gray-500">{item.doctor_reg_no}</td>
+                      <td className="py-3 px-3">
+                        <div className="font-semibold text-slate-800">{item.doctor_name || 'Dr. Consulted'}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{item.doctor_reg_no ? `Reg: ${item.doctor_reg_no}` : ''}</div>
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white border-t px-6 py-3 flex justify-between items-center text-sm text-gray-600">
-        <div>Total Entries: <span className="font-semibold text-gray-900">{filteredData.length}</span></div>
-        <div className="flex gap-6">
-          <div>Schedule H1: <span className="font-semibold text-gray-900">{h1Count}</span></div>
-          <div>Schedule X: <span className="font-semibold text-gray-900">{xCount}</span></div>
-        </div>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+

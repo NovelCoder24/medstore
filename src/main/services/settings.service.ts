@@ -108,4 +108,13 @@ export function registerSettingsHandlers() {
     saveStoreHeaderSettings(settingsData)
     return true
   })
+
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_GET_VALUE, (_, key: string) => {
+    return getSetting(key)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SETTINGS_SET_VALUE, (_, key: string, value: string) => {
+    setSetting(key, value)
+    return true
+  })
 }

@@ -61,145 +61,149 @@ export function StoreHeaderSettingsCard() {
   }
 
   return (
-    <div className="flex items-start gap-5">
-      <div className="p-3 bg-primary/10 text-primary rounded-xl">
-        <Building2 className="w-6 h-6" />
+    <div className="flex items-start gap-4">
+      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+        <Building2 className="w-5 h-5" />
       </div>
       <div className="flex-1">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">Bill & Store Header Format</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Customize shop header information printed on thermal receipts and tax invoices.
+            <h3 className="text-base font-bold text-slate-900">Receipt & Invoice Header Information</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Customize pharmacy business details printed on thermal receipts, tax invoices, and regulatory reports.
               {!isOwner && <span className="text-amber-600 font-medium ml-1">(Owner privilege required to edit)</span>}
             </p>
           </div>
         </div>
 
         {error && (
-          <div className="mt-4 p-3 text-sm text-red-500 bg-red-500/10 rounded-md">
+          <div className="mt-4 p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl">
             {error}
           </div>
         )}
 
         {isLoading ? (
-          <div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading store settings...
+          <div className="flex items-center gap-2 py-8 text-slate-400 text-xs font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" /> Loading store settings...
           </div>
         ) : (
-          <form onSubmit={handleSave} className="mt-6 space-y-4">
+          <form onSubmit={handleSave} className="mt-5 space-y-4 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Store / Shop Name</label>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Pharmacy / Store Name</label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storeName}
                   onChange={(e) => setFormState({ ...formState, storeName: e.target.value })}
                   placeholder="e.g. SHIV SHAKTI MEDICAL STORE"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background font-semibold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-bold text-slate-900"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Subtitle / Tagline</label>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Subtitle / Tagline</label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storeSubtitle}
                   onChange={(e) => setFormState({ ...formState, storeSubtitle: e.target.value })}
                   placeholder="e.g. Chemist & Druggist"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Location / Address</label>
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1.5">Location / Address</label>
               <input
                 type="text"
                 disabled={!isOwner || isSaving}
                 value={formState.storeAddress}
                 onChange={(e) => setFormState({ ...formState, storeAddress: e.target.value })}
                 placeholder="e.g. Shop No. 14, Near Govt. Hospital, G.E. Road, Bhilai 3"
-                className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Phone Number</label>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Phone Number</label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storePhone}
                   onChange={(e) => setFormState({ ...formState, storePhone: e.target.value })}
                   placeholder="e.g. 9131741818"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-mono font-medium"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Proprietor Name</label>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">Proprietor / Pharmacist Name</label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storeProprietor}
                   onChange={(e) => setFormState({ ...formState, storeProprietor: e.target.value })}
                   placeholder="e.g. P. L. Sahu"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">GSTIN <span className="text-xs text-muted-foreground font-normal">(Optional - leave empty to hide on receipt)</span></label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  GSTIN <span className="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storeGstin}
                   onChange={(e) => setFormState({ ...formState, storeGstin: e.target.value })}
                   placeholder="e.g. 22AAAAA0000A1Z5"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background uppercase font-mono"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 uppercase font-mono font-medium"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Drug License No. (DL No.) <span className="text-xs text-muted-foreground font-normal">(Optional - leave empty to hide on receipt)</span></label>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  Drug License No. (DL No.) <span className="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                </label>
                 <input
                   type="text"
                   disabled={!isOwner || isSaving}
                   value={formState.storeDl}
                   onChange={(e) => setFormState({ ...formState, storeDl: e.target.value })}
                   placeholder="e.g. CG-BZ1-2023-001"
-                  className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background uppercase font-mono"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 uppercase font-mono font-medium"
                 />
               </div>
             </div>
 
             {isOwner ? (
-              <div className="flex items-center gap-4 pt-4">
+              <div className="flex items-center gap-3 pt-3">
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-colors rounded-md bg-primary hover:bg-primary/90 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition disabled:opacity-50"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                   Save Store Details
                 </button>
 
                 {isSaved && (
-                  <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 animate-in fade-in">
+                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 animate-in fade-in">
                     <CheckCircle2 className="w-4 h-4" />
                     Receipt header updated
                   </span>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-md border border-amber-200 mt-4">
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-4">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
-                Only users with OWNER permissions can modify receipt header & store details.
+                Only users with OWNER role can modify store details and receipt formats.
               </div>
             )}
           </form>
@@ -208,3 +212,4 @@ export function StoreHeaderSettingsCard() {
     </div>
   )
 }
+

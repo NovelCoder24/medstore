@@ -11,9 +11,11 @@ export const IPC_CHANNELS = {
   // ── Database (Phase 0) ──
   DB_STATUS: 'db:status',
 
-  // ── Settings (safeStorage) ──
+  // ── Settings (safeStorage & general) ──
   SETTINGS_GET_SECRET: 'settings:get-secret',
   SETTINGS_SET_SECRET: 'settings:set-secret',
+  SETTINGS_GET_VALUE: 'settings:get-value',
+  SETTINGS_SET_VALUE: 'settings:set-value',
 
   // ── Users & Auth (Phase 1) ──
   USERS_LOGIN: 'users:login',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
-import { Settings, KeyRound, Loader2, Save, CheckCircle2, FileSpreadsheet, Download } from 'lucide-react'
+import { Settings, KeyRound, Loader2, Save, CheckCircle2, FileSpreadsheet, Download, Sparkles } from 'lucide-react'
 import { BackupSettings } from './BackupSettings'
 import { StoreHeaderSettingsCard } from './StoreHeaderSettingsCard'
 
@@ -9,6 +9,7 @@ export function SettingsForm() {
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [hasExistingKey, setHasExistingKey] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash')
   const [error, setError] = useState<string | null>(null)
   
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM
@@ -19,22 +20,32 @@ export function SettingsForm() {
     window.api.invoke(IPC_CHANNELS.SETTINGS_GET_SECRET, 'GEMINI_API_KEY')
       .then((exists) => setHasExistingKey(exists))
       .catch((err) => console.error('Failed to check API key:', err))
+
+    // Fetch saved model preference
+    window.api.invoke(IPC_CHANNELS.SETTINGS_GET_VALUE, 'GEMINI_MODEL')
+      .then((model) => {
+        if (model) setSelectedModel(model)
+      })
+      .catch((err) => console.error('Failed to get GEMINI_MODEL:', err))
   }, [])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!apiKey.trim()) return
 
     setIsSaving(true)
     setError(null)
     setIsSaved(false)
 
     try {
-      await window.api.invoke(IPC_CHANNELS.SETTINGS_SET_SECRET, 'GEMINI_API_KEY', apiKey.trim())
-      setIsSaved(true)
-      setHasExistingKey(true)
-      setApiKey('') // Clear the input field for security
+      if (apiKey.trim()) {
+        await window.api.invoke(IPC_CHANNELS.SETTINGS_SET_SECRET, 'GEMINI_API_KEY', apiKey.trim())
+        setHasExistingKey(true)
+        setApiKey('') // Clear the input field for security
+      }
+
+      await window.api.invoke(IPC_CHANNELS.SETTINGS_SET_VALUE, 'GEMINI_MODEL', selectedModel)
       
+      setIsSaved(true)
       setTimeout(() => setIsSaved(false), 3000)
     } catch (err: any) {
       setError(err.message || 'Failed to save API Key securely.')
@@ -44,147 +55,162 @@ export function SettingsForm() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-auto items-center">
+    <div className="max-w-5xl mx-auto space-y-8 pb-12 font-sans">
       {/* Header */}
-      <div className="w-full border-b bg-card">
-        <div className="max-w-4xl mx-auto flex items-center gap-3 p-6">
-          <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-            <Settings className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">System Settings</h1>
-            <p className="text-sm text-muted-foreground">Configure application preferences and integrations</p>
-          </div>
-        </div>
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Pharmacy & System Settings</h2>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Configure store receipt headers, drug license compliance, AI invoice extraction, and automatic database backups.
+        </p>
       </div>
 
-      <div className="w-full max-w-4xl px-8 py-10 space-y-12">
-        
-        {/* OCR Settings Section */}
-        <section className="pb-12 border-b border-muted/60">
-          <div className="flex items-start gap-5">
-            <div className="p-3 bg-primary/10 text-primary rounded-xl">
-              <KeyRound className="w-6 h-6" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold tracking-tight">OCR Integration (Gemini AI)</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Configure your Google Gemini API Key to enable automated invoice extraction.
-                Your key is encrypted using OS-level secure storage (safeStorage) and never leaves your device.
-              </p>
-
+      {/* 1. OCR Integration (Gemini AI) */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+            <KeyRound className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">AI Invoice OCR Integration</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure your Google Gemini API Key and model preferences for automatic purchase bill extraction.
+                </p>
+              </div>
               {hasExistingKey && !isSaved && (
-                <div className="flex items-center gap-2 mt-4 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-3 rounded-md border border-emerald-200 dark:border-emerald-500/20">
-                  <CheckCircle2 className="w-4 h-4" />
-                  API Key is currently configured and secured.
-                </div>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> API Key Encrypted & Active
+                </span>
               )}
+            </div>
 
-              {error && (
-                <div className="mt-4 p-3 text-sm text-red-500 bg-red-500/10 rounded-md">
-                  {error}
-                </div>
-              )}
+            {error && (
+              <div className="mt-4 p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl">
+                {error}
+              </div>
+            )}
 
-              <form onSubmit={handleSave} className="mt-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Gemini API Key</label>
+            <form onSubmit={handleSave} className="mt-5 space-y-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Gemini API Key</label>
                   <input
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={hasExistingKey ? "•••••••••••••••• (Enter new key to overwrite)" : "Paste your API key here..."}
-                    className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background font-mono"
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-mono"
                     disabled={isSaving}
                   />
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <button
-                    type="submit"
-                    disabled={isSaving || !apiKey.trim()}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-colors rounded-md bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1.5">Preferred Gemini Model</label>
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
                   >
-                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {hasExistingKey ? 'Update Key' : 'Save Key'}
-                  </button>
-
-                  {isSaved && (
-                    <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 animate-in fade-in">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Saved securely
-                    </span>
-                  )}
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (Default - Fast & High Efficiency)</option>
+                    <option value="gemini-3.1-pro">gemini-3.1-pro (High Accuracy for Complex Bills)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro (Stable Fallback Model)</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (Legacy)</option>
+                  </select>
                 </div>
-              </form>
-            </div>
-          </div>
-        </section>
-        
-        {/* Store Header & Bill Format Settings Section */}
-        <section className="pb-12 border-b border-muted/60">
-          <StoreHeaderSettingsCard />
-        </section>
+              </div>
 
-        {/* Backup Settings Section */}
-        <section className="pb-12 border-b border-muted/60">
-          <BackupSettings />
-        </section>
-
-        {/* GST Reports Section */}
-        <section>
-          <div className="flex items-start gap-5">
-            <div className="p-3 bg-primary/10 text-primary rounded-xl">
-              <FileSpreadsheet className="w-6 h-6" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-semibold tracking-tight">GST Reports (GSTR-1)</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Export your monthly GSTR-1 sales data in CSV format for tax filing.
+              <p className="text-[11px] text-slate-400">
+                Note: In case of network rate limits or heavy cloud traffic, the system automatically falls back to <strong>gemini-2.5-pro</strong> to avoid interrupting your workflow.
               </p>
 
-              <div className="mt-6 flex items-end gap-4">
-                <div className="space-y-2 flex-1 max-w-xs">
-                  <label className="text-sm font-medium">Select Month</label>
-                  <input
-                    type="month"
-                    value={reportMonth}
-                    onChange={(e) => setReportMonth(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
-                  />
-                </div>
+              <div className="flex items-center gap-3 pt-2">
                 <button
-                  onClick={async () => {
-                    if (!reportMonth) return
-                    setIsExportingGst(true)
-                    try {
-                      const csvContent = await window.api.invoke(IPC_CHANNELS.REPORTS_GSTR1, reportMonth)
-                      const blob = new Blob([csvContent], { type: 'text/csv' })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `GSTR1_${reportMonth}.csv`
-                      document.body.appendChild(a)
-                      a.click()
-                      document.body.removeChild(a)
-                      URL.revokeObjectURL(url)
-                    } catch (err) {
-                      alert('Failed to generate GST report')
-                    } finally {
-                      setIsExportingGst(false)
-                    }
-                  }}
-                  disabled={isExportingGst || !reportMonth}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-colors rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 h-10"
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition disabled:opacity-50"
                 >
-                  {isExportingGst ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  Export CSV
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save AI Settings
                 </button>
+
+                {isSaved && (
+                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4" />
+                    AI settings saved securely
+                  </span>
+                )}
               </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Store Header & Bill Format */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <StoreHeaderSettingsCard />
+      </section>
+
+      {/* 3. GST Reports (GSTR-1) */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
+            <FileSpreadsheet className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-slate-900">GST Compliance Reports (GSTR-1)</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Export your monthly B2C tax invoice records and sales returns into official government GST CSV format.
+            </p>
+
+            <div className="mt-5 flex items-end gap-3 max-w-md">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Month</label>
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={(e) => setReportMonth(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  if (!reportMonth) return
+                  setIsExportingGst(true)
+                  try {
+                    const csvContent = await window.api.invoke(IPC_CHANNELS.REPORTS_GSTR1, reportMonth)
+                    const blob = new Blob([csvContent], { type: 'text/csv' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `GSTR1_${reportMonth}.csv`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  } catch (err) {
+                    alert('Failed to generate GST report')
+                  } finally {
+                    setIsExportingGst(false)
+                  }
+                }}
+                disabled={isExportingGst || !reportMonth}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition disabled:opacity-50 h-9"
+              >
+                {isExportingGst ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                Export GSTR-1 CSV
+              </button>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
+
+      {/* 4. Backup & Restore */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
+        <BackupSettings />
+      </section>
     </div>
   )
 }
+

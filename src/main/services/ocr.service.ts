@@ -3,14 +3,14 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { GoogleGenAI, Type } from '@google/genai'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getSecretSetting } from './settings.service'
+import { getSecretSetting, getSetting } from './settings.service'
 import { getVendorOcrProfile, buildVendorContextPromptBlock } from './vendor-ocr-profile.service'
 import { z } from 'zod'
 import crypto from 'crypto'
 import type { OcrExtractionResult, OcrExtractedItem } from '../../shared/types'
 
-const MODEL_NAME = 'gemini-3.6-flash'
-
+// The fallback model to use if the user's selected model fails
+const FALLBACK_MODEL = 'gemini-2.5-pro'
 
 // ── Helpers ──
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -207,19 +207,35 @@ export async function extractInvoiceData(
     ? prompt + '\n\n' + vendorContextBlock
     : prompt
 
-  let response: any
-  let attempt = 0
-  const maxAttempts = 3
+  // Determine user's preferred model, default to fast 3.6-flash
+  const preferredModel = getSetting('GEMINI_MODEL') || 'gemini-3.6-flash'
 
-  while (attempt < maxAttempts) {
+  let response: any
+  let lastError: any = null
+
+  // Models to try in order: user's preferred model first, then fallback
+  const modelsToTry = [
+    { model: preferredModel, timeoutMs: 20000, label: 'preferred' },
+    { model: FALLBACK_MODEL, timeoutMs: 45000, label: 'fallback (gemini-2.5-pro)' }
+  ]
+
+  // If user's preferred IS the fallback, don't try the same model twice
+  if (preferredModel === FALLBACK_MODEL) {
+    modelsToTry.splice(1, 1) // Remove the duplicate
+  }
+
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const { model: modelToUse, timeoutMs, label } = modelsToTry[i]
+    console.log(`[OCR] Attempt ${i + 1}/${modelsToTry.length} using ${label} model: ${modelToUse} (timeout: ${timeoutMs / 1000}s)`)
+
     try {
       let timeoutId: NodeJS.Timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('TIMEOUT_15S')), 15000)
+        timeoutId = setTimeout(() => reject(new Error(`TIMEOUT_${timeoutMs}MS`)), timeoutMs)
       })
 
       const apiCall = ai.models.generateContent({
-        model: MODEL_NAME,
+        model: modelToUse,
         contents: [
           {
             role: "user",
@@ -279,25 +295,31 @@ export async function extractInvoiceData(
         clearTimeout(timeoutId!)
       })
 
-      // If we got here, it succeeded, break out of loop
+      // If we got here, it succeeded — break out of the loop
+      console.log(`[OCR] Success with ${label} model: ${modelToUse}`)
+      lastError = null
       break
     } catch (err: any) {
-      attempt++
-      if (err?.message === 'TIMEOUT_15S') {
-        console.warn(`[OCR] Timeout on attempt ${attempt}`)
-        // Do not retry on a 15-second timeout to avoid keeping the cashier waiting for 45+ seconds
-        throw new Error('OCR Service timed out after 15 seconds. Please use manual entry.')
-      }
+      lastError = err
+      const isTimeout = err?.message?.startsWith('TIMEOUT_')
+      const reason = isTimeout ? 'timeout' : (err?.message || 'unknown error')
+      console.warn(`[OCR] ${label} model (${modelToUse}) failed: ${reason}`)
 
-      if (err?.status === 503 || err?.message?.includes('503') || err?.message?.includes('UNAVAILABLE') || attempt < maxAttempts) {
-        console.warn(`[OCR] Gemini API error (attempt ${attempt}/${maxAttempts}): ${err.message}`)
-        if (attempt >= maxAttempts) throw err
-        // Wait 2 seconds before retrying
-        await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
-      } else {
-        throw err
+      // If there's another model to try, wait briefly and continue the loop
+      if (i < modelsToTry.length - 1) {
+        console.log(`[OCR] Falling back to next model...`)
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     }
+  }
+
+  // If all models failed, throw the last error
+  if (lastError) {
+    const isTimeout = lastError?.message?.startsWith('TIMEOUT_')
+    if (isTimeout) {
+      throw new Error('AI service is experiencing heavy traffic. All models timed out. Please try again in a moment or use manual entry.')
+    }
+    throw lastError
   }
 
   const responseText = response.text

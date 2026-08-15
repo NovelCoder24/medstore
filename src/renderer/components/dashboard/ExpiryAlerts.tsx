@@ -75,10 +75,10 @@ export function ExpiryAlerts() {
               : 'border-blue-500/30 bg-blue-500/5'
 
           const badgeClass = isCritical
-            ? 'bg-red-500/15 text-red-700 dark:text-red-300'
+            ? 'bg-[#484848] text-red-700 dark:text-red-300'
             : isWarning
-              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-              : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+              ? 'bg-[#484848] text-amber-700 dark:text-amber-300'
+              : 'bg-[#484848] text-blue-700 dark:text-blue-300'
 
           const badgeText = isCritical ? 'CRITICAL' : isWarning ? 'WARNING' : 'NOTICE'
 

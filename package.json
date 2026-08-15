@@ -1,6 +1,6 @@
 {
   "name": "medstore",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline-first pharmacy POS and inventory management system",
   "main": "./out/main/index.js",
   "scripts": {
@@ -9,6 +9,7 @@
     "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
     "package": "electron-vite build && electron-builder --win",
+    "publish": "electron-vite build && electron-builder --win --publish always",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit/",
