@@ -85,12 +85,17 @@ export function PurchaseForm() {
       // Try to auto-match vendor by GSTIN first, then by name
       let matchedVendor: any = null
       if (vendors) {
-        if (result.vendorGstin) {
-          matchedVendor = vendors.find(v => v.gstin?.toUpperCase() === result.vendorGstin!.toUpperCase()) || null
+        if (result.vendorGstin && result.vendorGstin.trim()) {
+          const searchGstin = result.vendorGstin.trim().toUpperCase()
+          matchedVendor = vendors.find(v => v.gstin && v.gstin.trim().toUpperCase() === searchGstin) || null
         }
 
-        if (!matchedVendor && result.vendorName) {
-          matchedVendor = vendors.find(v => v.name.toLowerCase().includes(result.vendorName!.toLowerCase())) || null
+        if (!matchedVendor && result.vendorName && result.vendorName.trim()) {
+          const searchName = result.vendorName.trim().toLowerCase()
+          matchedVendor = vendors.find(v => {
+            const vName = v.name.trim().toLowerCase()
+            return vName === searchName || vName.includes(searchName) || searchName.includes(vName)
+          }) || null
         }
       }
 
@@ -99,10 +104,10 @@ export function PurchaseForm() {
       if (matchedVendor) {
         // Existing vendor found: Only fill in fields that are CURRENTLY MISSING in DB (do NOT overwrite existing master details)
         const updatesToApply: Record<string, string> = {}
-        if (!matchedVendor.contact_phone && result.vendorPhone) updatesToApply.contact_phone = result.vendorPhone
-        if (!matchedVendor.contact_email && result.vendorEmail) updatesToApply.contact_email = result.vendorEmail
-        if (!matchedVendor.address && result.vendorAddress) updatesToApply.address = result.vendorAddress
-        if (!matchedVendor.gstin && result.vendorGstin) updatesToApply.gstin = result.vendorGstin
+        if (!matchedVendor.contact_phone && result.vendorPhone) updatesToApply.contact_phone = result.vendorPhone.trim()
+        if (!matchedVendor.contact_email && result.vendorEmail) updatesToApply.contact_email = result.vendorEmail.trim().toLowerCase()
+        if (!matchedVendor.address && result.vendorAddress) updatesToApply.address = result.vendorAddress.trim()
+        if (!matchedVendor.gstin && result.vendorGstin) updatesToApply.gstin = result.vendorGstin.trim().toUpperCase()
 
         if (Object.keys(updatesToApply).length > 0) {
           try {
@@ -112,20 +117,22 @@ export function PurchaseForm() {
             console.error("Failed to sync missing vendor fields from OCR:", e)
           }
         }
-      } else if (result.vendorName) {
+      } else if (result.vendorName && result.vendorName.trim()) {
         // Vendor does NOT exist: Create new vendor with extracted contact details
         try {
           const newVendor = await window.api.invoke(IPC_CHANNELS.VENDORS_CREATE, {
-            name: result.vendorName,
-            gstin: result.vendorGstin || null,
-            contact_phone: result.vendorPhone || null,
-            contact_email: result.vendorEmail || null,
-            address: result.vendorAddress || null
+            name: result.vendorName.trim(),
+            gstin: result.vendorGstin ? result.vendorGstin.trim().toUpperCase() : null,
+            contact_phone: result.vendorPhone ? result.vendorPhone.trim() : null,
+            contact_email: result.vendorEmail ? result.vendorEmail.trim().toLowerCase() : null,
+            address: result.vendorAddress ? result.vendorAddress.trim() : null
           })
           matchedVendorId = newVendor.id
           await queryClient.invalidateQueries({ queryKey: ['vendors'] })
         } catch (e) {
-          console.error("Failed to auto-create vendor:", e)
+          console.error("Failed to auto-create vendor (may already exist):", e)
+          // If creation failed because vendor already exists, refresh vendors list
+          await queryClient.invalidateQueries({ queryKey: ['vendors'] })
         }
       }
 

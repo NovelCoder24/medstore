@@ -421,6 +421,7 @@ interface VendorFormModalProps {
 function VendorFormModal({ vendor, isOpen, onClose }: VendorFormModalProps) {
   const createVendorMutation = useCreateVendor()
   const updateVendorMutation = useUpdateVendor()
+  const { data: allVendors } = useVendors()
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -443,22 +444,50 @@ function VendorFormModal({ vendor, isOpen, onClose }: VendorFormModalProps) {
       setAddress('')
       setGstin('')
     }
+    setError(null)
   }, [vendor, isOpen])
 
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setError('Supplier / Vendor name is required.')
+      return
+    }
+
+    const trimmedGstin = gstin.trim() ? gstin.trim().toUpperCase() : null
+
+    // Client-side quick duplicate validation
+    if (allVendors) {
+      const duplicateName = allVendors.find(
+        (v) => v.name.trim().toLowerCase() === trimmedName.toLowerCase() && v.id !== vendor?.id
+      )
+      if (duplicateName) {
+        setError(`A supplier with the name "${duplicateName.name}" already exists.`)
+        return
+      }
+
+      if (trimmedGstin) {
+        const duplicateGstin = allVendors.find(
+          (v) => v.gstin && v.gstin.trim().toUpperCase() === trimmedGstin && v.id !== vendor?.id
+        )
+        if (duplicateGstin) {
+          setError(`A supplier with GSTIN "${trimmedGstin}" already exists (${duplicateGstin.name}).`)
+          return
+        }
+      }
+    }
 
     setError(null)
 
     const payload = {
-      name: name.trim(),
+      name: trimmedName,
       contact_phone: phone.trim() || null,
       contact_email: email.trim() || null,
       address: address.trim() || null,
-      gstin: gstin.trim() ? gstin.trim().toUpperCase() : null
+      gstin: trimmedGstin
     }
 
     try {

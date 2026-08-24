@@ -12,6 +12,7 @@ export interface Vendor {
   address: string | null
   ocr_profile_json: string | null
   current_balance_paise: number
+  is_active?: number
   created_at: string
 }
 
@@ -40,7 +41,7 @@ export interface VendorLedgerEntry {
 
 export function listVendors(): Vendor[] {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM vendors ORDER BY name ASC').all() as Vendor[]
+  return db.prepare('SELECT * FROM vendors WHERE is_active = 1 ORDER BY name ASC').all() as Vendor[]
 }
 
 export function getVendor(id: number): Vendor | undefined {
@@ -50,16 +51,45 @@ export function getVendor(id: number): Vendor | undefined {
 
 export function createVendor(data: Omit<Vendor, 'id' | 'created_at' | 'current_balance_paise'>): Vendor {
   const db = getDatabase()
+  const trimmedName = (data.name || '').trim()
+  if (!trimmedName) {
+    throw new Error('Supplier / Vendor name is required.')
+  }
+
+  const trimmedGstin = data.gstin && data.gstin.trim() ? data.gstin.trim().toUpperCase() : null
+
+  // 1. Check for duplicate Supplier Name (case-insensitive) among active vendors
+  const existingByName = db.prepare(`
+    SELECT id, name FROM vendors 
+    WHERE LOWER(TRIM(name)) = LOWER(?) AND is_active = 1
+  `).get(trimmedName) as { id: number; name: string } | undefined
+
+  if (existingByName) {
+    throw new Error(`A supplier with the name "${existingByName.name}" already exists.`)
+  }
+
+  // 2. Check for duplicate GSTIN (if provided) among active vendors
+  if (trimmedGstin) {
+    const existingByGstin = db.prepare(`
+      SELECT id, name FROM vendors 
+      WHERE UPPER(TRIM(gstin)) = ? AND is_active = 1
+    `).get(trimmedGstin) as { id: number; name: string } | undefined
+
+    if (existingByGstin) {
+      throw new Error(`A supplier with GSTIN "${trimmedGstin}" already exists (${existingByGstin.name}).`)
+    }
+  }
+
   const result = db.prepare(`
-    INSERT INTO vendors (name, gstin, state_code, contact_phone, contact_email, address, ocr_profile_json, current_balance_paise)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    INSERT INTO vendors (name, gstin, state_code, contact_phone, contact_email, address, ocr_profile_json, current_balance_paise, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)
   `).run(
-    data.name,
-    data.gstin || null,
-    data.state_code || null,
-    data.contact_phone || null,
-    data.contact_email || null,
-    data.address || null,
+    trimmedName,
+    trimmedGstin,
+    data.state_code ? data.state_code.trim() : null,
+    data.contact_phone ? data.contact_phone.trim() : null,
+    data.contact_email ? data.contact_email.trim().toLowerCase() : null,
+    data.address ? data.address.trim() : null,
     data.ocr_profile_json || null
   )
   
@@ -68,14 +98,74 @@ export function createVendor(data: Omit<Vendor, 'id' | 'created_at' | 'current_b
 
 export function updateVendor(id: number, data: Partial<Omit<Vendor, 'id' | 'created_at'>>): Vendor {
   const db = getDatabase()
+  const existing = getVendor(id)
+  if (!existing) {
+    throw new Error(`Supplier with ID ${id} not found`)
+  }
+
   const updates: string[] = []
   const values: any[] = []
 
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) {
-      updates.push(`${key} = ?`)
-      values.push(value)
+  // Check Name duplication if name is being updated
+  if (data.name !== undefined) {
+    const trimmedName = data.name.trim()
+    if (!trimmedName) {
+      throw new Error('Supplier name cannot be empty.')
     }
+
+    const existingByName = db.prepare(`
+      SELECT id, name FROM vendors 
+      WHERE LOWER(TRIM(name)) = LOWER(?) AND id != ? AND is_active = 1
+    `).get(trimmedName, id) as { id: number; name: string } | undefined
+
+    if (existingByName) {
+      throw new Error(`Another supplier with the name "${existingByName.name}" already exists.`)
+    }
+
+    updates.push('name = ?')
+    values.push(trimmedName)
+  }
+
+  // Check GSTIN duplication if GSTIN is being updated
+  if (data.gstin !== undefined) {
+    const trimmedGstin = data.gstin && data.gstin.trim() ? data.gstin.trim().toUpperCase() : null
+    if (trimmedGstin) {
+      const existingByGstin = db.prepare(`
+        SELECT id, name FROM vendors 
+        WHERE UPPER(TRIM(gstin)) = ? AND id != ? AND is_active = 1
+      `).get(trimmedGstin, id) as { id: number; name: string } | undefined
+
+      if (existingByGstin) {
+        throw new Error(`Another supplier with GSTIN "${trimmedGstin}" already exists (${existingByGstin.name}).`)
+      }
+    }
+    updates.push('gstin = ?')
+    values.push(trimmedGstin)
+  }
+
+  if (data.state_code !== undefined) {
+    updates.push('state_code = ?')
+    values.push(data.state_code ? data.state_code.trim() : null)
+  }
+  if (data.contact_phone !== undefined) {
+    updates.push('contact_phone = ?')
+    values.push(data.contact_phone ? data.contact_phone.trim() : null)
+  }
+  if (data.contact_email !== undefined) {
+    updates.push('contact_email = ?')
+    values.push(data.contact_email ? data.contact_email.trim().toLowerCase() : null)
+  }
+  if (data.address !== undefined) {
+    updates.push('address = ?')
+    values.push(data.address ? data.address.trim() : null)
+  }
+  if (data.ocr_profile_json !== undefined) {
+    updates.push('ocr_profile_json = ?')
+    values.push(data.ocr_profile_json || null)
+  }
+  if (data.is_active !== undefined) {
+    updates.push('is_active = ?')
+    values.push(data.is_active ? 1 : 0)
   }
 
   if (updates.length > 0) {

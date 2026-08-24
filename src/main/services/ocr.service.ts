@@ -325,12 +325,6 @@ export async function extractInvoiceData(
   const responseText = response.text
   if (!responseText) throw new Error('Failed to extract data from image. Empty response.')
 
-  // Commit (save) the exact raw result from Gemini 2.5 Flash for debugging
-  console.log("=== RAW GEMINI 2.5 FLASH RESULT ===")
-  console.log(responseText)
-  console.log("===================================")
-  fs.writeFileSync(`${archivedPath}.raw_response.json`, responseText)
-
   try {
     // 4. Parse JSON & Validate with Zod
     const rawData = JSON.parse(responseText)

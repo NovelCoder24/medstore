@@ -9,17 +9,6 @@
  */
 
 import * as m001 from './001_initial_schema'
-/**
- * Migration registry — import all migrations and export as sorted array.
- * The migration runner iterates this array in version order.
- *
- * To add a new migration:
- * 1. Create src/main/db/migrations/NNN_description.ts
- * 2. Import it here
- * 3. Add to the migrations array
- */
-
-import * as m001 from './001_initial_schema'
 import * as m002 from './002_fts5_products'
 import * as m003 from './003_settings'
 import * as m004 from './004_purchase_net_rate'
@@ -30,14 +19,13 @@ import * as m008 from './008_audit_entity_name'
 import * as m009 from './009_vendor_payments'
 import * as m010 from './010_soft_delete_enforcement'
 import * as m011 from './011_sales_customer_address'
+import * as m012 from './012_vendor_unique_indexes'
 
 export interface Migration {
   version: number
   name: string
   sql: string
 }
-
-
 
 export const migrations: Migration[] = [
   m001,
@@ -50,7 +38,9 @@ export const migrations: Migration[] = [
   m008,
   m009,
   m010,
-  m011
+  m011,
+  m012
 ].sort(
   (a, b) => a.version - b.version
 )
+

@@ -4,6 +4,7 @@ publish:
   provider: github
   owner: NovelCoder24
   repo: medstore
+  releaseType: release
 directories:
   buildResources: build
 files:
