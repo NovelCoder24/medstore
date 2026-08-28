@@ -3,7 +3,7 @@ import { join } from 'path'
 import { existsSync, mkdirSync, copyFileSync, unlinkSync, renameSync, readdirSync, statSync } from 'fs'
 import { Worker } from 'worker_threads'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
-import { getDatabase, closeDatabase } from './db.service'
+import { getDatabase, closeDatabase, drainAndCloseDatabase } from './db.service'
 import { APP_DEFAULTS } from '../../shared/constants'
 import Database from 'better-sqlite3'
 
@@ -85,11 +85,11 @@ export async function restoreBackup(backupFilePath: string): Promise<void> {
   const shmPath = `${activeDbPath}-shm`
   const corruptedDbPath = join(dbDir, `medstore_corrupted_${Date.now()}.db`)
 
-  // 3. Close active database
-  closeDatabase()
+  // 3. Drain active transactions and close active database cleanly
+  await drainAndCloseDatabase(5000)
 
   // 4. Wait for OS file locks to release
-  await new Promise(resolve => setTimeout(resolve, 150))
+  await new Promise(resolve => setTimeout(resolve, 200))
 
   // 5. Explicitly delete WAL and SHM files to prevent SQLite from applying old WAL to new DB
   try {

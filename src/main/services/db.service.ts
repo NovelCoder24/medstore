@@ -122,13 +122,56 @@ function runMigrations(): void {
   }
 }
 
+let isDraining = false
+
+export function isDatabaseDraining(): boolean {
+  return isDraining
+}
+
+/**
+ * Drains active transactions, checkpoints WAL, and safely closes the database connection.
+ */
+export async function drainAndCloseDatabase(timeoutMs = 5000): Promise<void> {
+  if (!db) return
+  isDraining = true
+
+  const startTime = Date.now()
+  // Wait for any in-flight transaction to finish
+  while (db && db.inTransaction && (Date.now() - startTime) < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
+  if (db) {
+    try {
+      // Force WAL checkpoint to flush all data before closing
+      db.pragma('wal_checkpoint(TRUNCATE)')
+    } catch (e) {
+      console.warn('[DB] WAL checkpoint during drain warning:', e)
+    }
+
+    try {
+      db.close()
+      console.log('[DB] Connection drained and closed cleanly')
+    } catch (err: any) {
+      console.error('[DB] Error during db.close():', err)
+    } finally {
+      db = null
+      isDraining = false
+    }
+  }
+}
+
 /**
  * Close the database connection gracefully.
  * Called on app quit.
  */
 export function closeDatabase(): void {
   if (db) {
-    db.close()
+    try {
+      db.close()
+    } catch (err) {
+      console.error('[DB] Error closing database:', err)
+    }
     db = null
     console.log('[DB] Connection closed')
   }
