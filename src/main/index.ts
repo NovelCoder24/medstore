@@ -127,13 +127,20 @@ app.on('before-quit', async (event) => {
 
   console.log('Running automated backup before quit...')
   try {
-    await createBackup()
+    await Promise.race([
+      createBackup(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Backup timed out after 15 seconds')), 15000))
+    ])
     console.log('Automated backup completed successfully.')
   } catch (error) {
-    console.error('Automated backup failed:', error)
+    console.error('Automated backup failed or timed out:', error)
   }
 
-  closeDatabase()
+  try {
+    closeDatabase()
+  } catch (err) {
+    console.error('Error closing database on quit:', err)
+  }
   app.exit(0)
 })
 
