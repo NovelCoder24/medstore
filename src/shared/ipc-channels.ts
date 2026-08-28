@@ -83,6 +83,8 @@ export const IPC_CHANNELS = {
   PRINT_RECEIPT: 'print:receipt',
   PRINT_TEST: 'print:test',
   PRINT_PDF: 'print:pdf',
+  PRINT_OPEN_TEMPLATE: 'print:open-template',
+  PRINT_PREVIEW_SAMPLE: 'print:preview-sample',
 
   // ── OCR (Phase 5) ──
   OCR_EXTRACT: 'ocr:extract',

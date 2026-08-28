@@ -76,3 +76,79 @@ export function assertPaise(value: number, fieldName = 'amount'): Paise {
   }
   return value as Paise
 }
+
+const ONES = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN']
+const TENS = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY']
+
+function convertChunk(num: number): string {
+  if (num === 0) return ''
+  if (num < 20) return ONES[num]
+  if (num < 100) {
+    const tens = TENS[Math.floor(num / 10)]
+    const ones = ONES[num % 10]
+    return ones ? `${tens} ${ones}` : tens
+  }
+  const hundreds = ONES[Math.floor(num / 100)]
+  const rest = convertChunk(num % 100)
+  return rest ? `${hundreds} HUNDRED AND ${rest}` : `${hundreds} HUNDRED`
+}
+
+/**
+ * Convert numerical rupees to Indian English words in uppercase.
+ * Example: 8400 -> "EIGHT THOUSAND FOUR HUNDRED ONLY"
+ * Example: 13620 -> "THIRTEEN THOUSAND SIX HUNDRED AND TWENTY ONLY"
+ */
+export function numberToIndianWords(rupees: number): string {
+  if (!rupees || rupees <= 0) return 'ZERO ONLY'
+
+  const wholeRupees = Math.floor(rupees)
+  const paise = Math.round((rupees - wholeRupees) * 100)
+
+  let words = ''
+
+  const crore = Math.floor(wholeRupees / 10000000)
+  const rest1 = wholeRupees % 10000000
+
+  const lakh = Math.floor(rest1 / 100000)
+  const rest2 = rest1 % 100000
+
+  const thousand = Math.floor(rest2 / 1000)
+  const rest3 = rest2 % 1000
+
+  const hundred = Math.floor(rest3 / 100)
+  const units = rest3 % 100
+
+  if (crore > 0) {
+    words += `${convertChunk(crore)} CRORE `
+  }
+  if (lakh > 0) {
+    words += `${convertChunk(lakh)} LAKH `
+  }
+  if (thousand > 0) {
+    words += `${convertChunk(thousand)} THOUSAND `
+  }
+  if (hundred > 0) {
+    words += `${ONES[hundred]} HUNDRED `
+  }
+  if (units > 0) {
+    if (words !== '') {
+      words += `AND ${convertChunk(units)} `
+    } else {
+      words += `${convertChunk(units)} `
+    }
+  }
+
+  words = words.trim()
+
+  if (paise > 0) {
+    const paiseWords = convertChunk(paise)
+    if (words) {
+      return `${words} AND ${paiseWords} PAISE ONLY`.replace(/\s+/g, ' ')
+    } else {
+      return `${paiseWords} PAISE ONLY`.replace(/\s+/g, ' ')
+    }
+  }
+
+  return `${words} ONLY`.replace(/\s+/g, ' ')
+}
+

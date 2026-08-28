@@ -14,7 +14,11 @@ export function StoreHeaderSettingsCard() {
     storePhone: '9131741818',
     storeProprietor: 'P. L. Sahu',
     storeGstin: '',
-    storeDl: ''
+    storeDl: '',
+    storeState: 'CG',
+    storeAccountNo: '741805000316',
+    storeIfsc: 'ICIC0007418',
+    storeBankName: 'ICICI Bank'
   })
 
   const [isLoading, setIsLoading] = useState(true)
@@ -33,7 +37,11 @@ export function StoreHeaderSettingsCard() {
             storePhone: data.storePhone || '',
             storeProprietor: data.storeProprietor || '',
             storeGstin: data.storeGstin || '',
-            storeDl: data.storeDl || ''
+            storeDl: data.storeDl || '',
+            storeState: data.storeState || 'CG',
+            storeAccountNo: data.storeAccountNo || '741805000316',
+            storeIfsc: data.storeIfsc || 'ICIC0007418',
+            storeBankName: data.storeBankName || 'ICICI Bank'
           })
         }
       })
@@ -152,6 +160,50 @@ export function StoreHeaderSettingsCard() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  State / Code <span className="text-[11px] text-slate-400 font-normal">(e.g. CG)</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={!isOwner || isSaving}
+                  value={formState.storeState}
+                  onChange={(e) => setFormState({ ...formState, storeState: e.target.value })}
+                  placeholder="e.g. CG"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 uppercase font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  Bank Account Number <span className="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={!isOwner || isSaving}
+                  value={formState.storeAccountNo}
+                  onChange={(e) => setFormState({ ...formState, storeAccountNo: e.target.value })}
+                  placeholder="e.g. 741805000316"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-mono font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1.5">
+                  Bank IFSC Code <span className="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={!isOwner || isSaving}
+                  value={formState.storeIfsc}
+                  onChange={(e) => setFormState({ ...formState, storeIfsc: e.target.value })}
+                  placeholder="e.g. ICIC0007418"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 uppercase font-mono font-medium"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1.5">
@@ -183,22 +235,56 @@ export function StoreHeaderSettingsCard() {
             </div>
 
             {isOwner ? (
-              <div className="flex items-center gap-3 pt-3">
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition disabled:opacity-50"
-                >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  Save Store Details
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Save Store Details
+                  </button>
 
-                {isSaved && (
-                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Receipt header updated
-                  </span>
-                )}
+                  {isSaved && (
+                    <span className="text-xs text-emerald-600 font-bold flex items-center gap-1 animate-in fade-in">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Receipt header updated
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await window.api.invoke(IPC_CHANNELS.PRINT_OPEN_TEMPLATE)
+                      } catch (err: any) {
+                        setError(err.message || 'Failed to open template file.')
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition"
+                    title="Open invoice.hbs in your system text editor"
+                  >
+                    📄 Edit Template (.hbs)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await window.api.invoke(IPC_CHANNELS.PRINT_PREVIEW_SAMPLE)
+                      } catch (err: any) {
+                        setError(err.message || 'Failed to open preview.')
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-bold border border-teal-200 transition shadow-xs"
+                    title="Preview Tax Invoice with sample medicine items"
+                  >
+                    👁️ Preview Tax Invoice
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200 mt-4">
@@ -206,6 +292,10 @@ export function StoreHeaderSettingsCard() {
                 Only users with OWNER role can modify store details and receipt formats.
               </div>
             )}
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500">
+              💡 <strong>Smart Invoice Layout:</strong> If GSTIN, Drug License, or Bank Account are left blank, they will automatically be omitted from the Cash Memo / Tax Invoice without empty placeholders. You can also customize the layout directly by editing <code className="text-slate-800 font-mono font-semibold">Documents/MedStore/Templates/invoice.hbs</code>.
+            </div>
           </form>
         )}
       </div>

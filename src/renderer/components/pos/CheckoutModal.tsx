@@ -32,24 +32,54 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
   const [showPinOverride, setShowPinOverride] = useState(false)
   const [overridePin, setOverridePin] = useState('')
 
+  const [isPrinting, setIsPrinting] = useState(false)
+  const isPrintingRef = React.useRef(false)
+
+  const triggerPrint = React.useCallback(async (dataToPrint?: { sale: any, items: any[] } | null) => {
+    const target = dataToPrint || lastReceiptData
+    if (isPrintingRef.current || !target) return
+    isPrintingRef.current = true
+    setIsPrinting(true)
+    try {
+      await window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, target.sale, target.items)
+    } catch (err) {
+      console.error('Failed to print receipt:', err)
+    } finally {
+      setTimeout(() => {
+        isPrintingRef.current = false
+        setIsPrinting(false)
+      }, 600)
+    }
+  }, [lastReceiptData])
+
   React.useEffect(() => {
     if (!success) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        if (lastReceiptData) {
-          window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, lastReceiptData.sale, lastReceiptData.items)
+
+    // Small delay prevents the 'Enter' key press used to submit checkout form from double-triggering print
+    const timer = setTimeout(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          e.stopPropagation()
+          triggerPrint()
+        } else if (e.key === 'Escape' || e.key === ' ') {
+          e.preventDefault()
+          clearCart()
+          onOpenChange(false)
+          setSuccess(false)
         }
-      } else if (e.key === 'Escape' || e.key === ' ') {
-        e.preventDefault()
-        clearCart()
-        onOpenChange(false)
-        setSuccess(false)
       }
+      window.addEventListener('keydown', handleKeyDown)
+      cleanup = () => window.removeEventListener('keydown', handleKeyDown)
+    }, 350)
+
+    let cleanup: (() => void) | undefined
+
+    return () => {
+      clearTimeout(timer)
+      if (cleanup) cleanup()
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [success, lastReceiptData, clearCart, onOpenChange])
+  }, [success, triggerPrint, clearCart, onOpenChange])
 
   const totals = getTotals()
 
@@ -137,11 +167,11 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
           grandTotalPaise: payload.grandTotalPaise
         }
         
-        setLastReceiptData({ sale: receiptSale, items })
-        await window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, receiptSale, items)
+        const receiptData = { sale: receiptSale, items }
+        setLastReceiptData(receiptData)
+        await triggerPrint(receiptData)
       } catch (printErr) {
         console.error("Failed to print receipt", printErr)
-        // We don't fail the checkout if printing fails, but maybe show a toast in a real app
       }
 
     } catch (err: any) {
@@ -184,14 +214,11 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (lastReceiptData) {
-                      window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, lastReceiptData.sale, lastReceiptData.items)
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-md transition-colors"
+                  disabled={isPrinting}
+                  onClick={() => triggerPrint()}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-md transition-colors disabled:opacity-50"
                 >
-                  Print Receipt (Enter)
+                  {isPrinting ? 'Opening...' : 'Print Receipt (Enter)'}
                 </button>
               </div>
             </div>

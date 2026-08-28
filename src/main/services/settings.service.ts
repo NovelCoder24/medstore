@@ -64,6 +64,10 @@ export interface StoreHeaderSettings {
   storeProprietor: string
   storeGstin: string
   storeDl: string
+  storeState?: string
+  storeAccountNo?: string
+  storeIfsc?: string
+  storeBankName?: string
 }
 
 export function getStoreHeaderSettings(): StoreHeaderSettings {
@@ -74,7 +78,11 @@ export function getStoreHeaderSettings(): StoreHeaderSettings {
     storePhone: getSetting('STORE_PHONE') || '9131741818',
     storeProprietor: getSetting('STORE_PROPRIETOR') || 'P. L. Sahu',
     storeGstin: getSetting('STORE_GSTIN') || '',
-    storeDl: getSetting('STORE_DL') || ''
+    storeDl: getSetting('STORE_DL') || '',
+    storeState: getSetting('STORE_STATE') || 'CG',
+    storeAccountNo: getSetting('STORE_ACCOUNT_NO') || '741805000316',
+    storeIfsc: getSetting('STORE_IFSC') || 'ICIC0007418',
+    storeBankName: getSetting('STORE_BANK_NAME') || 'ICICI Bank'
   }
 }
 
@@ -86,6 +94,10 @@ export function saveStoreHeaderSettings(settings: Partial<StoreHeaderSettings>):
   if (settings.storeProprietor !== undefined) setSetting('STORE_PROPRIETOR', settings.storeProprietor.trim())
   if (settings.storeGstin !== undefined) setSetting('STORE_GSTIN', settings.storeGstin.trim())
   if (settings.storeDl !== undefined) setSetting('STORE_DL', settings.storeDl.trim())
+  if (settings.storeState !== undefined) setSetting('STORE_STATE', settings.storeState.trim())
+  if (settings.storeAccountNo !== undefined) setSetting('STORE_ACCOUNT_NO', settings.storeAccountNo.trim())
+  if (settings.storeIfsc !== undefined) setSetting('STORE_IFSC', settings.storeIfsc.trim())
+  if (settings.storeBankName !== undefined) setSetting('STORE_BANK_NAME', settings.storeBankName.trim())
 }
 
 export function registerSettingsHandlers() {
