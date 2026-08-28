@@ -62,6 +62,9 @@ function createWindow(): void {
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
+let isDbInitialized = false
+let isBackingUp = false
+
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.medstore')
@@ -75,6 +78,7 @@ app.whenReady().then(() => {
   // Initialize Database
   try {
     initDatabase()
+    isDbInitialized = true
     registerUserHandlers()
     registerVendorHandlers()
     registerCompositionHandlers()
@@ -106,9 +110,12 @@ app.whenReady().then(() => {
   })
 })
 
-let isBackingUp = false
-
 app.on('before-quit', async (event) => {
+  if (!isDbInitialized) {
+    app.exit(0)
+    return
+  }
+
   if (isBackingUp) {
     event.preventDefault()
     return
