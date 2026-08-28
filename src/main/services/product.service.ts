@@ -45,71 +45,41 @@ interface PaginatedResult<T> {
   totalPages: number
 }
 
+export function sanitizeFtsQuery(query: string): string {
+  // Strip double quotes, asterisks, caret, colons, parentheses, and other special characters
+  const words = query
+    .replace(/["*^:()\-+]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map(w => w.trim())
+    .filter(w => w.length > 0)
+
+  if (words.length === 0) return ''
+  return words.map(word => `"${word}"*`).join(' AND ')
+}
+
 export function searchProducts(params: ProductSearchParams): PaginatedResult<Product> {
   const db = getDatabase()
   const { query, categoryId, page = 1, pageSize = APP_DEFAULTS.PAGE_SIZE } = params
   
   const offset = (page - 1) * pageSize
   
-  let countSql = `SELECT count(*) as total FROM products p WHERE 1=1`
-  let dataSql = `
-    SELECT 
-      p.*,
-      c.salt_name as comp_salt_name, c.strength as comp_strength, c.dosage_form as comp_dosage_form,
-      COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) as total_stock_units
-    FROM products p
-    LEFT JOIN compositions c ON p.composition_id = c.id
-    WHERE 1=1
-  `
-  
-  const queryParams: any[] = []
-
-  if (query && query.trim().length > 0) {
-    // If the query is just digits and perfectly matches a barcode length, try an exact barcode match first
-    if (/^\d{8,14}$/.test(query.trim())) {
-      const barcodeClause = ` AND p.barcode = ?`
-      countSql += barcodeClause
-      dataSql += barcodeClause
-      queryParams.push(query.trim())
-    } else {
-      // Use FTS5
-      // Clean query for FTS MATCH: append * to each word for prefix matching
-      const ftsQuery = query.trim().split(/\s+/).map(word => `"${word}"*`).join(' AND ')
-      
-      const ftsClause = ` AND p.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)`
-      countSql += ftsClause
-      dataSql += ftsClause
-      queryParams.push(ftsQuery)
-      
-      // Order by rank for relevance when using FTS
-      dataSql += ` ORDER BY (SELECT rank FROM products_fts WHERE rowid = p.id) ASC`
-    }
-  } else {
-    // Default order if no FTS
-    dataSql += ` ORDER BY p.brand_name ASC`
-  }
-
-  if (categoryId) {
-    const categoryClause = ` AND p.category = ?`
-    countSql += categoryClause
-    // Insert before ORDER BY in dataSql
-    dataSql = dataSql.replace(' ORDER BY', `${categoryClause} ORDER BY`)
-    queryParams.push(categoryId) // Wait, we need to push it before the FTS query if FTS query exists? No, queryParams order matters.
-    // Let's rebuild properly.
-  }
-
-  // Rebuilding SQL parameters safely
   const conditions: string[] = []
   const values: any[] = []
+  let hasFts = false
 
   if (query && query.trim().length > 0) {
-    if (/^\d{8,14}$/.test(query.trim())) {
+    const trimmedQuery = query.trim()
+    if (/^\d{8,14}$/.test(trimmedQuery)) {
       conditions.push(`p.barcode = ?`)
-      values.push(query.trim())
+      values.push(trimmedQuery)
     } else {
-      const ftsQuery = query.trim().split(/\s+/).map(word => `"${word}"*`).join(' AND ')
-      conditions.push(`p.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)`)
-      values.push(ftsQuery)
+      const ftsQuery = sanitizeFtsQuery(trimmedQuery)
+      if (ftsQuery.length > 0) {
+        conditions.push(`p.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)`)
+        values.push(ftsQuery)
+        hasFts = true
+      }
     }
   }
 
@@ -139,7 +109,7 @@ export function searchProducts(params: ProductSearchParams): PaginatedResult<Pro
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const orderClause = query && !/^\d{8,14}$/.test(query.trim()) 
+  const orderClause = hasFts 
     ? `ORDER BY (SELECT rank FROM products_fts WHERE rowid = p.id) ASC`
     : `ORDER BY p.brand_name ASC`
 
