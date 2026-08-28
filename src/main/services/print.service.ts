@@ -801,10 +801,12 @@ export async function showInvoicePrintPreview(htmlContent: string, billNumber: s
 }
 
 /**
- * Generates an A4 PDF from HTML content
+ * Generates an A4 PDF from HTML content with guaranteed window cleanup and timeout.
  */
 export async function generatePdf(htmlContent: string, outputFilename: string, printOptions: any = {}): Promise<string> {
   return new Promise((resolve, reject) => {
+    let completed = false
+
     const printWindow = new BrowserWindow({
       show: false,
       webPreferences: {
@@ -813,10 +815,41 @@ export async function generatePdf(htmlContent: string, outputFilename: string, p
       }
     })
 
+    const timeout = setTimeout(() => {
+      if (!completed) {
+        completed = true
+        if (!printWindow.isDestroyed()) {
+          printWindow.destroy()
+        }
+        reject(new Error('PDF generation timed out after 10 seconds'))
+      }
+    }, 10000)
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      if (!printWindow.isDestroyed()) {
+        try {
+          printWindow.close()
+        } catch (e) {
+          try {
+            printWindow.destroy()
+          } catch (d) {}
+        }
+      }
+    }
+
     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent)
     printWindow.loadURL(dataUrl)
 
+    printWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+      if (completed) return
+      completed = true
+      cleanup()
+      reject(new Error(`Failed to load invoice content for PDF generation: ${errorDescription} (${errorCode})`))
+    })
+
     printWindow.webContents.on('did-finish-load', async () => {
+      if (completed) return
       try {
         const pdfData = await printWindow.webContents.printToPDF({
           printBackground: true,
@@ -834,11 +867,15 @@ export async function generatePdf(htmlContent: string, outputFilename: string, p
         }
 
         fs.writeFileSync(fullPath, pdfData)
-        printWindow.close()
+        completed = true
+        cleanup()
         resolve(fullPath)
       } catch (err: any) {
-        printWindow.close()
-        reject(err)
+        if (!completed) {
+          completed = true
+          cleanup()
+          reject(err)
+        }
       }
     })
   })
