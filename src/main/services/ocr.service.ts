@@ -94,7 +94,7 @@ function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string)
     fs.mkdirSync(invoicesDir, { recursive: true })
   }
 
-  const rawBuffer = Buffer.from(buffer as any)
+  const rawBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as any)
 
   // Compress image if it is a JPEG/PNG/WebP image
   if (mimeType.startsWith('image/')) {
@@ -151,16 +151,19 @@ export async function extractInvoiceData(
     throw new Error('GEMINI_API_KEY is not set. Please configure it in settings.')
   }
 
-  // 1. Archive original image
+  // 1. Archive & compress original image to disk
   const archivedPath = archiveInvoiceImage(payload.buffer, payload.mimeType)
 
-  // 2. Look up vendor OCR profile for context injection
+  // 2. Read compressed file (~100-250KB) instead of holding large 10MB raw buffer in memory
+  const compressedBuffer = fs.readFileSync(archivedPath)
+  const base64Image = compressedBuffer.toString('base64')
+  const mimeType = archivedPath.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'
+
+  // 3. Look up vendor OCR profile for context injection
   const vendorProfile = getVendorOcrProfile(vendorHint || {})
   const vendorContextBlock = buildVendorContextPromptBlock(vendorProfile)
 
   const ai = new GoogleGenAI({ apiKey })
-  const base64Image = Buffer.from(payload.buffer as any).toString('base64')
-  const mimeType = payload.mimeType || 'image/jpeg'
 
   const prompt = `
     You are an expert OCR assistant for an Indian retail pharmacy wholesaler invoice.
