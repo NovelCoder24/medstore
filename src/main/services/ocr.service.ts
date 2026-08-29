@@ -10,7 +10,7 @@ import crypto from 'crypto'
 import type { OcrExtractionResult, OcrExtractedItem } from '../../shared/types'
 
 // The fallback model to use if the user's selected model fails
-const FALLBACK_MODEL = 'gemini-2.5-pro'
+const FALLBACK_MODEL = 'gemini-3.5-flash'
 
 // ── Helpers ──
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -210,8 +210,8 @@ export async function extractInvoiceData(
     ? prompt + '\n\n' + vendorContextBlock
     : prompt
 
-  // Determine user's preferred model, default to fast 3.6-flash
-  const preferredModel = getSetting('GEMINI_MODEL') || 'gemini-3.6-flash'
+  // Determine user's preferred model, default to fast gemini-3.7-flash
+  const preferredModel = getSetting('GEMINI_MODEL') || 'gemini-3.7-flash'
 
   let response: any
   let lastError: any = null
@@ -219,7 +219,7 @@ export async function extractInvoiceData(
   // Models to try in order: user's preferred model first, then fallback
   const modelsToTry = [
     { model: preferredModel, timeoutMs: 20000, label: 'preferred' },
-    { model: FALLBACK_MODEL, timeoutMs: 45000, label: 'fallback (gemini-2.5-pro)' }
+    { model: FALLBACK_MODEL, timeoutMs: 45000, label: `fallback (${FALLBACK_MODEL})` }
   ]
 
   // If user's preferred IS the fallback, don't try the same model twice

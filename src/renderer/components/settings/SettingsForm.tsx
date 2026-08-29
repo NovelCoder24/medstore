@@ -9,7 +9,7 @@ export function SettingsForm() {
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [hasExistingKey, setHasExistingKey] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-3.7-flash')
   const [error, setError] = useState<string | null>(null)
   
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM
@@ -113,16 +113,15 @@ export function SettingsForm() {
                     disabled={isSaving}
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
                   >
-                    <option value="gemini-3.6-flash">gemini-3.6-flash (Default - Fast & High Efficiency)</option>
-                    <option value="gemini-3.1-pro">gemini-3.1-pro (High Accuracy for Complex Bills)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro (Stable Fallback Model)</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (Legacy)</option>
+                    <option value="gemini-3.7-flash">gemini-3.7-flash (Default - Fast & High Accuracy)</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash (Balanced & High Efficiency)</option>
+                    <option value="gemini-3.5-flash-lit">gemini-3.5-flash-lit (Lightweight & Ultra Fast)</option>
                   </select>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-400">
-                Note: In case of network rate limits or heavy cloud traffic, the system automatically falls back to <strong>gemini-2.5-pro</strong> to avoid interrupting your workflow.
+                Note: In case of network rate limits or heavy cloud traffic, the system automatically falls back to <strong>gemini-3.5-flash</strong> to avoid interrupting your workflow.
               </p>
 
               <div className="flex items-center gap-3 pt-2">
