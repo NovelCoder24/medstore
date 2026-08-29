@@ -1,10 +1,34 @@
-const { parentPort, workerData } = require('worker_threads')
-const Database = require('better-sqlite3')
-const path = require('path')
+import { parentPort, workerData } from 'worker_threads'
+import Database from 'better-sqlite3'
 
-const { dbPath, startDate, endDate } = workerData
+interface WorkerData {
+  dbPath: string
+  startDate: string
+  endDate: string
+}
 
-let db: any = null
+export interface ScheduleRegisterRow {
+  sale_date: string
+  bill_number: string
+  drug_name: string
+  schedule_flag: string
+  generic_name: string | null
+  composition: string
+  batch_number: string
+  expiry_date: string
+  qty_sold: number
+  pack_size: number
+  patient_name: string
+  patient_phone: string | null
+  patient_address: string | null
+  doctor_name: string
+  doctor_reg_no: string
+  sold_by: string
+}
+
+const { dbPath, startDate, endDate } = workerData as WorkerData
+
+let db: Database.Database | null = null
 
 try {
   db = new Database(dbPath, { readonly: true })
@@ -42,7 +66,7 @@ try {
     ORDER BY s.created_at ASC
   `)
 
-  const rows = stmt.all(startDate, adjustedEnd)
+  const rows = stmt.all(startDate, adjustedEnd) as ScheduleRegisterRow[]
 
   // Generate CSV Content
   const csvHeaders = [
@@ -52,12 +76,20 @@ try {
   ]
 
   const csvRows = rows.map((r, i) => {
-    // Format quantity (e.g. 30 (2x15))
-    const qtySold = r.qty_sold
-    const packSize = r.pack_size
-    const qtyDisplay = packSize > 1 
-      ? `${qtySold} (${Math.floor(qtySold / packSize)}x${packSize})`
-      : `${qtySold}`
+    // Format quantity (e.g. 30 (2x15) or 25 (2x10 + 5))
+    const qtySold = r.qty_sold || 0
+    const packSize = r.pack_size && r.pack_size > 0 ? r.pack_size : 1
+    const packs = Math.floor(qtySold / packSize)
+    const loose = qtySold % packSize
+
+    let qtyDisplay = `${qtySold}`
+    if (packSize > 1) {
+      if (loose > 0 && packs > 0) {
+        qtyDisplay = `${qtySold} (${packs}x${packSize} + ${loose})`
+      } else if (packs > 0) {
+        qtyDisplay = `${qtySold} (${packs}x${packSize})`
+      }
+    }
 
     const rowData = [
       i + 1,
@@ -89,13 +121,9 @@ try {
 
   const csvContent = [csvHeaders.join(','), ...csvRows].join('\n')
   
-  if (parentPort) {
-    parentPort.postMessage({ success: true, data: rows, csvContent })
-  }
+  parentPort?.postMessage({ success: true, data: rows, csvContent })
 } catch (error: any) {
-  if (parentPort) {
-    parentPort.postMessage({ success: false, error: error.message })
-  }
+  parentPort?.postMessage({ success: false, error: error.message })
 } finally {
   if (db) {
     try {

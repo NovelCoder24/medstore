@@ -55,22 +55,37 @@ export function ScheduleRegister() {
   }
 
   const generatePrintHtml = (storeName: string) => {
-    const rowsHtml = filteredData.map((r, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${r.sale_date.split('T')[0]}</td>
-        <td>${r.bill_number}</td>
-        <td>${r.schedule_flag}</td>
-        <td>${r.drug_name}</td>
-        <td>${r.batch_number}</td>
-        <td>${r.expiry_date}</td>
-        <td>${r.pack_size > 1 ? `${r.qty_sold} (${Math.floor(r.qty_sold / r.pack_size)}x${r.pack_size})` : r.qty_sold}</td>
-        <td>${r.patient_name}</td>
-        <td>${r.patient_address || ''}</td>
-        <td>${r.doctor_name}</td>
-        <td>${r.doctor_reg_no}</td>
-      </tr>
-    `).join('')
+    const rowsHtml = filteredData.map((r, i) => {
+      const qtySold = r.qty_sold || 0
+      const packSize = r.pack_size && r.pack_size > 0 ? r.pack_size : 1
+      const packs = Math.floor(qtySold / packSize)
+      const loose = qtySold % packSize
+      let qtyDisplay = `${qtySold}`
+      if (packSize > 1) {
+        if (loose > 0 && packs > 0) {
+          qtyDisplay = `${qtySold} (${packs}x${packSize} + ${loose})`
+        } else if (packs > 0) {
+          qtyDisplay = `${qtySold} (${packs}x${packSize})`
+        }
+      }
+
+      return `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.sale_date ? r.sale_date.slice(0, 10) : '-'}</td>
+          <td>${r.bill_number}</td>
+          <td>${r.schedule_flag}</td>
+          <td>${r.drug_name}</td>
+          <td>${r.batch_number}</td>
+          <td>${r.expiry_date}</td>
+          <td>${qtyDisplay}</td>
+          <td>${r.patient_name}</td>
+          <td>${r.patient_address || ''}</td>
+          <td>${r.doctor_name}</td>
+          <td>${r.doctor_reg_no}</td>
+        </tr>
+      `
+    }).join('')
 
     return `
       <!DOCTYPE html>
@@ -246,7 +261,7 @@ export function ScheduleRegister() {
                   const isSchH1 = item.schedule_flag === 'H1'
                   return (
                     <tr key={index} className="hover:bg-slate-50 transition">
-                      <td className="py-3 px-3 text-slate-500 font-mono">{item.sale_date?.split('T')[0] || '-'}</td>
+                      <td className="py-3 px-3 text-slate-500 font-mono">{item.sale_date ? item.sale_date.slice(0, 10) : '-'}</td>
                       <td className="py-3 px-3 font-bold text-slate-900 font-mono">{item.bill_number}</td>
                       <td className="py-3 px-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
@@ -272,7 +287,20 @@ export function ScheduleRegister() {
                         <div className="text-[10px] text-slate-400">Exp: {item.expiry_date}</div>
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-slate-900">
-                        {item.pack_size > 1 ? `${item.qty_sold} units (${Math.floor(item.qty_sold / item.pack_size)}p)` : `${item.qty_sold} units`}
+                        {(() => {
+                          const qtySold = item.qty_sold || 0
+                          const packSize = item.pack_size && item.pack_size > 0 ? item.pack_size : 1
+                          const packs = Math.floor(qtySold / packSize)
+                          const loose = qtySold % packSize
+                          if (packSize > 1) {
+                            if (loose > 0 && packs > 0) {
+                              return `${qtySold} units (${packs}p + ${loose}u)`
+                            } else if (packs > 0) {
+                              return `${qtySold} units (${packs}p)`
+                            }
+                          }
+                          return `${qtySold} units`
+                        })()}
                       </td>
                       <td className="py-3 px-3">
                         <div className="font-bold text-slate-900">{item.patient_name}</div>
