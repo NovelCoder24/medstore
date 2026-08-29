@@ -1,7 +1,6 @@
 import { getDatabase } from './db.service'
 import { ipcMain } from 'electron'
-import { IPC_CHANNELS } from '../../shared/ipc-channels'
-import { APP_DEFAULTS } from '../../shared/constants'
+import { IPC_CHANNELS } from '../../shared/ipc-channels' 
 import { calculateItemGst, aggregateGst, GstBreakdown } from '../../shared/utils/gst'
 
 export interface SalePayload {
@@ -71,8 +70,8 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
   const insertSale = db.prepare(`
     INSERT INTO sales (
       bill_number, cashier_id, payment_mode, customer_name, customer_mobile, customer_address, doctor_name, doctor_reg_no,
-      subtotal_paise, discount_paise, cgst_paise, sgst_paise, igst_paise, total_paise, customer_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      subtotal_paise, discount_paise, cgst_paise, sgst_paise, igst_paise, total_paise, customer_id, gst_type
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   const insertSaleItem = db.prepare(`
@@ -156,7 +155,8 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
       aggregateTotals.sgstPaise,
       aggregateTotals.igstPaise,
       aggregateTotals.lineTotalPaise,
-      payload.customerId || null
+      payload.customerId || null,
+      isInterState ? 'INTER' : 'INTRA'
     )
 
     const saleId = saleResult.lastInsertRowid as number
@@ -292,13 +292,12 @@ export interface ReturnItemPayload {
 export function processSalesReturn(saleId: number, userId: number, reason: string | null, items: ReturnItemPayload[]): { returnNumber: string } {
   const db = getDatabase()
 
-  const returnNumber = (() => {
+  const executeReturn = db.transaction(() => {
+    // Generate unique return number inside transaction to prevent race conditions
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM sales_returns WHERE return_number LIKE ?`).get(`RET-${today}%`) as { cnt: number }
-    return `RET-${today}-${String(countRow.cnt + 1).padStart(4, '0')}`
-  })()
+    const returnNumber = `RET-${today}-${String(countRow.cnt + 1).padStart(4, '0')}`
 
-  const executeReturn = db.transaction(() => {
     // 1. Create sales_return record first to get ID
     const insertReturn = db.prepare(`
       INSERT INTO sales_returns (original_sale_id, return_number, processed_by, reason, refund_amount_paise)

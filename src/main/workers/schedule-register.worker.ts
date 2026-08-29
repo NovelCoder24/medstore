@@ -10,7 +10,7 @@ try {
   db = new Database(dbPath, { readonly: true })
 
   // Adjust end date to include the entire day
-  const adjustedEnd = endDate + 'T23:59:59'
+  const adjustedEnd = endDate.includes(' ') || endDate.includes('T') ? endDate : `${endDate} 23:59:59`
 
   const stmt = db.prepare(`
     SELECT
@@ -19,7 +19,7 @@ try {
       p.brand_name       AS drug_name,
       p.schedule_flag,
       p.generic_name,
-      c.salt_name || ' ' || c.strength || ' ' || c.dosage_form AS composition,
+      TRIM(COALESCE(c.salt_name, '') || ' ' || COALESCE(c.strength, '') || ' ' || COALESCE(c.dosage_form, '')) AS composition,
       b.batch_number,
       b.expiry_date,
       si.quantity        AS qty_sold,
@@ -36,7 +36,7 @@ try {
     JOIN batches b       ON si.batch_id = b.id
     JOIN users u         ON s.cashier_id = u.id
     LEFT JOIN compositions c ON p.composition_id = c.id
-    WHERE p.schedule_flag IN ('H1', 'X')
+    WHERE p.schedule_flag IN ('H', 'H1', 'X')
       AND s.created_at >= ?
       AND s.created_at <= ?
     ORDER BY s.created_at ASC
@@ -61,7 +61,7 @@ try {
 
     const rowData = [
       i + 1,
-      r.sale_date.split('T')[0],
+      r.sale_date ? r.sale_date.slice(0, 10) : '',
       r.bill_number,
       r.schedule_flag,
       r.drug_name,
