@@ -116,7 +116,6 @@ export function SettingsForm() {
                     <option value="gemini-3.7-flash">gemini-3.7-flash (Default - Fast & High Accuracy)</option>
                     <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & High Efficiency)</option>
                     <option value="gemini-3.5-flash">gemini-3.5-flash (Balanced)</option>
-                    <option value="gemini-3.5-flash-lit">gemini-3.5-flash-lit (Lightweight & Ultra Fast)</option>
                   </select>
                 </div>
               </div>
