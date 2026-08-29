@@ -4,8 +4,10 @@ const path = require('path')
 
 const { dbPath, startDate, endDate } = workerData
 
+let db: any = null
+
 try {
-  const db = new Database(dbPath, { readonly: true })
+  db = new Database(dbPath, { readonly: true })
 
   // Adjust end date to include the entire day
   const adjustedEnd = endDate + 'T23:59:59'
@@ -86,14 +88,20 @@ try {
   })
 
   const csvContent = [csvHeaders.join(','), ...csvRows].join('\n')
-
-  db.close()
   
   if (parentPort) {
     parentPort.postMessage({ success: true, data: rows, csvContent })
   }
-} catch (error) {
+} catch (error: any) {
   if (parentPort) {
     parentPort.postMessage({ success: false, error: error.message })
+  }
+} finally {
+  if (db) {
+    try {
+      db.close()
+    } catch (e) {
+      // ignore
+    }
   }
 }

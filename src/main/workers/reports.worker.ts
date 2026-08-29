@@ -199,9 +199,16 @@ try {
   ]
   csvContent += summaryRow.join(',') + '\n'
 
-  db.close()
   parentPort?.postMessage({ success: true, csvContent })
 
 } catch (error: any) {
   parentPort?.postMessage({ success: false, error: error.message })
+} finally {
+  if (db) {
+    try {
+      db.close()
+    } catch (e) {
+      // ignore
+    }
+  }
 }

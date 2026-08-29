@@ -226,8 +226,9 @@ export interface CreateProductPayload extends Omit<Product, 'id' | 'created_at' 
 export function createProduct(data: CreateProductPayload): Product {
   const db = getDatabase()
   
-  if (data.barcode) {
-    const existing = db.prepare('SELECT id FROM products WHERE barcode = ?').get(data.barcode)
+  const cleanedBarcode = data.barcode && data.barcode.trim() !== '' ? data.barcode.trim() : null
+  if (cleanedBarcode) {
+    const existing = db.prepare('SELECT id FROM products WHERE barcode = ?').get(cleanedBarcode)
     if (existing) throw new Error('A product with this barcode already exists.')
   }
 
@@ -244,7 +245,7 @@ export function createProduct(data: CreateProductPayload): Product {
       payload.category,
       payload.composition_id || null,
       payload.pack_size,
-      payload.barcode || null,
+      cleanedBarcode,
       payload.hsn_code || null,
       payload.gst_rate_pct,
       payload.schedule_flag,
@@ -291,8 +292,12 @@ export function createProduct(data: CreateProductPayload): Product {
 export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'created_at'>>): Product {
   const db = getDatabase()
   
-  if (data.barcode) {
-    const existing = db.prepare('SELECT id FROM products WHERE barcode = ? AND id != ?').get(data.barcode, id)
+  const cleanedBarcode = data.barcode !== undefined 
+    ? (data.barcode && data.barcode.trim() !== '' ? data.barcode.trim() : null)
+    : undefined
+
+  if (cleanedBarcode) {
+    const existing = db.prepare('SELECT id FROM products WHERE barcode = ? AND id != ?').get(cleanedBarcode, id)
     if (existing) throw new Error('A product with this barcode already exists.')
   }
 
@@ -303,6 +308,9 @@ export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'cr
   const dbData = { ...data }
   delete dbData.total_stock_units
   delete dbData.composition
+  if (data.barcode !== undefined) {
+    dbData.barcode = cleanedBarcode as any
+  }
 
   for (const [key, value] of Object.entries(dbData)) {
     if (value !== undefined) {
