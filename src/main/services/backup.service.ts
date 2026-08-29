@@ -21,6 +21,13 @@ export async function createBackup(): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 15)
   const backupFilename = `medstore_backup_${timestamp}.db`
   const backupPath = join(backupDir, backupFilename)
+  const tempBackupPath = join(backupDir, `${backupFilename}.tmp`)
+
+  const cleanupTemp = () => {
+    try {
+      if (existsSync(tempBackupPath)) unlinkSync(tempBackupPath)
+    } catch (e) {}
+  }
 
   return new Promise((resolve, reject) => {
     // 1. Resolve path to the compiled worker file
@@ -30,13 +37,18 @@ export async function createBackup(): Promise<string> {
       : join(__dirname, 'backup.worker.js')
 
     const worker = new Worker(workerPath, {
-      workerData: { dbPath: activeDbPath, backupPath }
+      workerData: { dbPath: activeDbPath, backupPath: tempBackupPath }
     })
 
     worker.on('message', (msg) => {
       if (msg.success) {
-        // Manage retention (keep 30 backups)
         try {
+          // Atomic rename from .tmp to .db on verified success (D8)
+          if (existsSync(tempBackupPath)) {
+            renameSync(tempBackupPath, backupPath)
+          }
+
+          // Manage retention (keep 30 backups)
           const backups = readdirSync(backupDir)
             .filter(f => f.endsWith('.db'))
             .map(f => ({ name: f, path: join(backupDir, f), time: statSync(join(backupDir, f)).birthtimeMs }))
@@ -48,18 +60,26 @@ export async function createBackup(): Promise<string> {
               try { unlinkSync(file.path) } catch(e) {}
             })
           }
-        } catch (e) {
-          console.error('Failed to cleanup old backups', e)
+          resolve(backupPath)
+        } catch (err: any) {
+          cleanupTemp()
+          reject(err)
         }
-        resolve(msg.backupPath)
       } else {
+        cleanupTemp()
         reject(new Error(msg.error))
       }
     })
 
-    worker.on('error', reject)
+    worker.on('error', (err) => {
+      cleanupTemp()
+      reject(err)
+    })
     worker.on('exit', (code) => {
-      if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`))
+      if (code !== 0) {
+        cleanupTemp()
+        reject(new Error(`Worker stopped with exit code ${code}`))
+      }
     })
   })
 }

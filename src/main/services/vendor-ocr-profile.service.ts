@@ -86,49 +86,55 @@ export function saveVendorOcrCorrection(
   if (realCorrections.length === 0) return
 
   const db = getDatabase()
-  const row = db.prepare('SELECT ocr_profile_json FROM vendors WHERE id = ?')
-    .get(vendorId) as { ocr_profile_json: string | null } | undefined
 
-  if (!row) {
-    console.warn(`[VendorOCR] Cannot save corrections: vendor ${vendorId} not found`)
-    return
-  }
+  // Atomic read-modify-write in transaction to prevent lost updates (D6)
+  const executeSave = db.transaction(() => {
+    const row = db.prepare('SELECT ocr_profile_json FROM vendors WHERE id = ?')
+      .get(vendorId) as { ocr_profile_json: string | null } | undefined
 
-  let profile: VendorOcrProfile
-  try {
-    profile = row.ocr_profile_json ? JSON.parse(row.ocr_profile_json) : { ...EMPTY_PROFILE }
-  } catch {
-    profile = { ...EMPTY_PROFILE }
-  }
-
-  // Ensure arrays exist
-  profile.correctionHistory = profile.correctionHistory || []
-  profile.nameVariants = profile.nameVariants || []
-
-  const now = new Date().toISOString()
-
-  for (const c of realCorrections) {
-    const entry: VendorOcrCorrection = {
-      field: c.field,
-      wrongValue: c.wrongValue,
-      correctedValue: c.correctedValue,
-      timestamp: now
+    if (!row) {
+      console.warn(`[VendorOCR] Cannot save corrections: vendor ${vendorId} not found`)
+      return
     }
-    profile.correctionHistory.push(entry)
 
-    // If the correction is a vendor name fix, add to nameVariants
-    if (c.field === 'vendorName' && c.correctedValue && !profile.nameVariants.includes(c.correctedValue)) {
-      profile.nameVariants.push(c.correctedValue)
+    let profile: VendorOcrProfile
+    try {
+      profile = row.ocr_profile_json ? JSON.parse(row.ocr_profile_json) : { ...EMPTY_PROFILE }
+    } catch {
+      profile = { ...EMPTY_PROFILE }
     }
-  }
 
-  // Cap history: keep most recent MAX_CORRECTION_HISTORY entries
-  if (profile.correctionHistory.length > MAX_CORRECTION_HISTORY) {
-    profile.correctionHistory = profile.correctionHistory.slice(-MAX_CORRECTION_HISTORY)
-  }
+    // Ensure arrays exist
+    profile.correctionHistory = profile.correctionHistory || []
+    profile.nameVariants = profile.nameVariants || []
 
-  db.prepare('UPDATE vendors SET ocr_profile_json = ? WHERE id = ?')
-    .run(JSON.stringify(profile), vendorId)
+    const now = new Date().toISOString()
+
+    for (const c of realCorrections) {
+      const entry: VendorOcrCorrection = {
+        field: c.field,
+        wrongValue: c.wrongValue,
+        correctedValue: c.correctedValue,
+        timestamp: now
+      }
+      profile.correctionHistory.push(entry)
+
+      // If the correction is a vendor name fix, add to nameVariants
+      if (c.field === 'vendorName' && c.correctedValue && !profile.nameVariants.includes(c.correctedValue)) {
+        profile.nameVariants.push(c.correctedValue)
+      }
+    }
+
+    // Cap history: keep most recent MAX_CORRECTION_HISTORY entries
+    if (profile.correctionHistory.length > MAX_CORRECTION_HISTORY) {
+      profile.correctionHistory = profile.correctionHistory.slice(-MAX_CORRECTION_HISTORY)
+    }
+
+    db.prepare('UPDATE vendors SET ocr_profile_json = ? WHERE id = ?')
+      .run(JSON.stringify(profile), vendorId)
+  })
+
+  executeSave()
 }
 
 /**

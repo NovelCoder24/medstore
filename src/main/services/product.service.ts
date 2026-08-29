@@ -422,11 +422,32 @@ export function updateBatchStatus(batchId: number, newStatus: string, actorUserI
   return updated
 }
 
-export function deleteBatch(batchId: number) {
+export function deleteBatch(batchId: number, actorUserId?: number, reason?: string) {
   const db = getDatabase()
-  // Soft-delete: preserve the row for historical reporting (drug register compliance)
-  // but hide it from active POS batch selection dropdowns
-  db.prepare('UPDATE batches SET is_active = 0, status = \'DISPOSED\' WHERE id = ?').run(batchId)
+  // Soft-delete with ledger synchronization (D3):
+  // Preserve row for compliance, write compensating stock ledger entry, and zero out quantity
+  const executeDelete = db.transaction(() => {
+    const current = db.prepare('SELECT quantity, batch_number FROM batches WHERE id = ?').get(batchId) as { quantity: number; batch_number: string } | undefined
+    if (!current) return
+
+    if (current.quantity > 0) {
+      db.prepare(`
+        INSERT INTO stock_ledger (
+          batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
+        ) VALUES (?, 'ADJUSTMENT', ?, ?, ?, ?)
+      `).run(
+        batchId,
+        -current.quantity,
+        actorUserId ?? null,
+        reason || 'Batch Disposed / Deleted',
+        `BATCH_DISPOSAL-${batchId}`
+      )
+    }
+
+    db.prepare('UPDATE batches SET is_active = 0, status = \'DISPOSED\', quantity = 0 WHERE id = ?').run(batchId)
+  })
+
+  executeDelete()
 }
 
 export function registerProductHandlers() {

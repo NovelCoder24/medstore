@@ -87,17 +87,22 @@ export function getStoreHeaderSettings(): StoreHeaderSettings {
 }
 
 export function saveStoreHeaderSettings(settings: Partial<StoreHeaderSettings>): void {
-  if (settings.storeName !== undefined) setSetting('STORE_NAME', settings.storeName.trim())
-  if (settings.storeSubtitle !== undefined) setSetting('STORE_SUBTITLE', settings.storeSubtitle.trim())
-  if (settings.storeAddress !== undefined) setSetting('STORE_ADDRESS', settings.storeAddress.trim())
-  if (settings.storePhone !== undefined) setSetting('STORE_PHONE', settings.storePhone.trim())
-  if (settings.storeProprietor !== undefined) setSetting('STORE_PROPRIETOR', settings.storeProprietor.trim())
-  if (settings.storeGstin !== undefined) setSetting('STORE_GSTIN', settings.storeGstin.trim())
-  if (settings.storeDl !== undefined) setSetting('STORE_DL', settings.storeDl.trim())
-  if (settings.storeState !== undefined) setSetting('STORE_STATE', settings.storeState.trim())
-  if (settings.storeAccountNo !== undefined) setSetting('STORE_ACCOUNT_NO', settings.storeAccountNo.trim())
-  if (settings.storeIfsc !== undefined) setSetting('STORE_IFSC', settings.storeIfsc.trim())
-  if (settings.storeBankName !== undefined) setSetting('STORE_BANK_NAME', settings.storeBankName.trim())
+  const db = getDatabase()
+  const executeSave = db.transaction(() => {
+    if (settings.storeName !== undefined) setSetting('STORE_NAME', settings.storeName.trim())
+    if (settings.storeSubtitle !== undefined) setSetting('STORE_SUBTITLE', settings.storeSubtitle.trim())
+    if (settings.storeAddress !== undefined) setSetting('STORE_ADDRESS', settings.storeAddress.trim())
+    if (settings.storePhone !== undefined) setSetting('STORE_PHONE', settings.storePhone.trim())
+    if (settings.storeProprietor !== undefined) setSetting('STORE_PROPRIETOR', settings.storeProprietor.trim())
+    if (settings.storeGstin !== undefined) setSetting('STORE_GSTIN', settings.storeGstin.trim())
+    if (settings.storeDl !== undefined) setSetting('STORE_DL', settings.storeDl.trim())
+    if (settings.storeState !== undefined) setSetting('STORE_STATE', settings.storeState.trim())
+    if (settings.storeAccountNo !== undefined) setSetting('STORE_ACCOUNT_NO', settings.storeAccountNo.trim())
+    if (settings.storeIfsc !== undefined) setSetting('STORE_IFSC', settings.storeIfsc.trim())
+    if (settings.storeBankName !== undefined) setSetting('STORE_BANK_NAME', settings.storeBankName.trim())
+  })
+
+  executeSave()
 }
 
 export function registerSettingsHandlers() {

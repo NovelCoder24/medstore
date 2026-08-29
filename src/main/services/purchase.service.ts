@@ -81,11 +81,10 @@ export function createPurchase(payload: PurchasePayload): number {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
-  // Batch identity includes price points to handle DPCO price revisions.
-  // Same batch number with different MRP = separate stock lots (legally required).
+  // Batch identity includes price points & vendor_id for traceability (D2)
   const findBatch = db.prepare(`
     SELECT id, quantity FROM batches 
-    WHERE product_id = ? AND batch_number = ? AND expiry_date = ?
+    WHERE product_id = ? AND vendor_id = ? AND batch_number = ? AND expiry_date = ?
       AND mrp_paise = ? AND purchase_rate_paise = ?
       AND is_active = 1
   `)
@@ -189,6 +188,7 @@ export function createPurchase(payload: PurchasePayload): number {
       // Update or Create Batch
       const existingBatch = findBatch.get(
         item.productId,
+        payload.vendorId,
         normalizedBatchNumber,
         item.expiryDate,
         item.mrpPaise,

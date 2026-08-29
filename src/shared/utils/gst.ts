@@ -84,8 +84,8 @@ export function calculateItemGst(
     sgstPaise = 0
     igstPaise = totalTaxPaise
   } else {
-    // Even split; floor + remainder avoids 1-paise loss
-    cgstPaise = Math.floor(totalTaxPaise / 2)
+    // Even split; trunc + remainder avoids 1-paise skew on negative values (returns) (D5)
+    cgstPaise = Math.trunc(totalTaxPaise / 2)
     sgstPaise = totalTaxPaise - cgstPaise
     igstPaise = 0
   }
