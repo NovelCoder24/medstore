@@ -52,26 +52,42 @@ export function logAuditAction(payload: AuditLogPayload, dbContext?: Database.Da
   )
 }
 
-export function getAuditLogs(page: number = 1, pageSize: number = 50, filters?: { action?: string, startDate?: string, endDate?: string }) {
+export function getAuditLogs(
+  page: number = 1, 
+  pageSize: number = 50, 
+  filters?: { action?: string; startDate?: string; endDate?: string; cursorId?: number }
+) {
   const db = getDatabase()
   const offset = (page - 1) * pageSize
 
   let whereClause = '1=1'
-  const params: any[] = []
+  const countParams: any[] = []
+  const dataParams: any[] = []
 
   if (filters?.action && filters.action !== 'ALL') {
     whereClause += ' AND a.action = ?'
-    params.push(filters.action)
+    countParams.push(filters.action)
+    dataParams.push(filters.action)
   }
 
   if (filters?.startDate && filters?.endDate) {
     whereClause += ' AND a.created_at >= ? AND a.created_at <= ?'
-    params.push(filters.startDate, filters.endDate + 'T23:59:59')
+    countParams.push(filters.startDate, filters.endDate + 'T23:59:59')
+    dataParams.push(filters.startDate, filters.endDate + 'T23:59:59')
   }
 
-  const totalRow = db.prepare(`SELECT count(*) as total FROM audit_logs a WHERE ${whereClause}`).get(...params) as { total: number }
-  
-  params.push(pageSize, offset)
+  const totalRow = db.prepare(`SELECT count(*) as total FROM audit_logs a WHERE ${whereClause}`).get(...countParams) as { total: number }
+
+  let dataQueryWhere = whereClause
+  if (filters?.cursorId) {
+    // Keyset / cursor-based pagination: O(1) index seek via primary key (P2)
+    dataQueryWhere += ' AND a.id < ?'
+    dataParams.push(filters.cursorId, pageSize)
+  } else {
+    dataParams.push(pageSize, offset)
+  }
+
+  const paginationClause = filters?.cursorId ? 'LIMIT ?' : 'LIMIT ? OFFSET ?'
 
   const data = db.prepare(`
     SELECT 
@@ -81,16 +97,19 @@ export function getAuditLogs(page: number = 1, pageSize: number = 50, filters?: 
     FROM audit_logs a
     JOIN users u1 ON a.actor_user_id = u1.id
     LEFT JOIN users u2 ON a.override_by_user_id = u2.id
-    WHERE ${whereClause}
-    ORDER BY a.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(...params)
+    WHERE ${dataQueryWhere}
+    ORDER BY a.id DESC
+    ${paginationClause}
+  `).all(...dataParams)
+
+  const nextCursor = data.length > 0 ? (data[data.length - 1] as any).id : null
 
   return {
     data,
     total: totalRow.total,
     page,
-    pageSize
+    pageSize,
+    nextCursor
   }
 }
 
