@@ -62,13 +62,6 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
     }
   }
 
-  // Generate a unique bill number: MED-YYYYMMDD-NNNN
-  const billNumber = (() => {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM sales WHERE bill_number LIKE ?`).get(`MED-${today}%`) as { cnt: number }
-    return `MED-${today}-${String(countRow.cnt + 1).padStart(4, '0')}`
-  })()
-
   // Statements for processing checkout
   const getBatchInfo = db.prepare(`
     SELECT b.product_id, b.gst_rate_pct, b.mrp_paise, b.purchase_rate_paise
@@ -142,6 +135,11 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
 
   // Wrap everything in a transaction
   const executeCheckout = db.transaction(() => {
+    // Generate unique bill number inside transaction to prevent race conditions (D1)
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const countRow = db.prepare(`SELECT COUNT(*) as cnt FROM sales WHERE bill_number LIKE ?`).get(`MED-${today}%`) as { cnt: number }
+    const billNumber = `MED-${today}-${String(countRow.cnt + 1).padStart(4, '0')}`
+
     // 1. Create the Sale record using server-verified financial totals
     const saleResult = insertSale.run(
       billNumber,
@@ -442,7 +440,7 @@ export function getSaleForReceipt(saleId: number) {
   const itemsRows = db.prepare(`
     SELECT 
       si.*,
-      b.batch_number, b.expiry_date,
+      b.batch_number, b.expiry_date, b.mrp_paise,
       p.brand_name, p.pack_size, p.gst_rate_pct
     FROM sale_items si
     JOIN batches b ON si.batch_id = b.id
@@ -471,7 +469,7 @@ export function getSaleForReceipt(saleId: number) {
     batchNumber: row.batch_number,
     quantityUnits: row.quantity,
     packSize: row.pack_size,
-    mrpPaise: (row.unit_price_paise * row.quantity) / row.quantity, // unit_price_paise is sale price per unit
+    mrpPaise: row.mrp_paise ?? row.unit_price_paise,
     salePricePaise: row.unit_price_paise,
     discountPaise: row.discount_paise,
     gstRatePct: row.gst_rate_pct,
