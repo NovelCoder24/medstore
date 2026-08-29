@@ -162,6 +162,16 @@ export async function createSale(payload: SalePayload): Promise<{ id: number; bi
     const saleId = saleResult.lastInsertRowid as number
 
     if (payload.paymentMode === 'CREDIT' && payload.customerId) {
+      const freshCustomer = db.prepare('SELECT current_balance_paise, max_credit_limit_paise FROM customers WHERE id = ?').get(payload.customerId) as { current_balance_paise: number; max_credit_limit_paise: number } | undefined
+      if (!freshCustomer) throw new Error('Customer not found')
+
+      // Re-validate credit limit inside transaction to prevent concurrent race conditions (L1)
+      if (freshCustomer.current_balance_paise + aggregateTotals.lineTotalPaise > freshCustomer.max_credit_limit_paise) {
+        if (!payload.ownerPin) {
+          throw new Error('CREDIT_LIMIT_EXCEEDED')
+        }
+      }
+
       db.prepare(`
         INSERT INTO customer_ledger (customer_id, transaction_type, amount_paise, reference_id)
         VALUES (?, 'CREDIT_SALE', ?, ?)

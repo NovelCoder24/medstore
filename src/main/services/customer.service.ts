@@ -67,6 +67,17 @@ export function acceptPayment(customerId: number, amountPaise: number, reference
 
   const db = getDatabase()
   const transaction = db.transaction(() => {
+    // 1. Verify customer exists before creating ledger entries (L2)
+    const customer = db.prepare('SELECT id, current_balance_paise FROM customers WHERE id = ?').get(customerId) as { id: number; current_balance_paise: number } | undefined
+    if (!customer) {
+      throw new Error(`Customer with ID ${customerId} not found`)
+    }
+
+    // 2. Prevent overpayment creating negative balance
+    if (amountPaise > customer.current_balance_paise) {
+      throw new Error(`Payment amount (₹${(amountPaise / 100).toFixed(2)}) exceeds current outstanding balance (₹${(customer.current_balance_paise / 100).toFixed(2)})`)
+    }
+
     db.prepare(`
       INSERT INTO customer_ledger (customer_id, transaction_type, amount_paise, reference_id)
       VALUES (?, 'PAYMENT_RECEIVED', ?, ?)
@@ -74,7 +85,7 @@ export function acceptPayment(customerId: number, amountPaise: number, reference
 
     db.prepare(`
       UPDATE customers 
-      SET current_balance_paise = current_balance_paise - ?
+      SET current_balance_paise = MAX(0, current_balance_paise - ?)
       WHERE id = ?
     `).run(amountPaise, customerId)
 

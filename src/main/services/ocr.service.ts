@@ -213,7 +213,8 @@ export async function extractInvoiceData(
   // Determine user's preferred model, default to fast gemini-3.7-flash
   const preferredModel = getSetting('GEMINI_MODEL') || 'gemini-3.7-flash'
 
-  let response: any
+  let parsedResult: z.infer<typeof OcrExtractionSchema> | null = null
+  let rawJsonData: any = null
   let lastError: any = null
 
   // Models to try in order: user's preferred model first, then fallback
@@ -294,11 +295,19 @@ export async function extractInvoiceData(
         }
       })
 
-      response = await Promise.race([apiCall, timeoutPromise]).finally(() => {
+      const response: any = await Promise.race([apiCall, timeoutPromise]).finally(() => {
         clearTimeout(timeoutId!)
       })
 
-      // If we got here, it succeeded — break out of the loop
+      const responseText = response.text
+      if (!responseText) throw new Error('Empty response from AI model')
+
+      // Validate JSON & Schema inside retry loop to trigger fallback on bad output (L3)
+      const rawData = JSON.parse(responseText)
+      parsedResult = OcrExtractionSchema.parse(rawData)
+      rawJsonData = rawData
+
+      // If we got here, API call and schema parsing both succeeded
       console.log(`[OCR] Success with ${label} model: ${modelToUse}`)
       lastError = null
       break
@@ -317,68 +326,56 @@ export async function extractInvoiceData(
   }
 
   // If all models failed, throw the last error
-  if (lastError) {
+  if (!parsedResult || lastError) {
     const isTimeout = lastError?.message?.startsWith('TIMEOUT_')
     if (isTimeout) {
       throw new Error('AI service is experiencing heavy traffic. All models timed out. Please try again in a moment or use manual entry.')
     }
-    throw lastError
+    throw new Error('Failed to extract and validate AI response shape: ' + (lastError?.message || 'Unknown error'))
   }
 
-  const responseText = response.text
-  if (!responseText) throw new Error('Failed to extract data from image. Empty response.')
-
-  try {
-    // 4. Parse JSON & Validate with Zod
-    const rawData = JSON.parse(responseText)
-    const validatedData = OcrExtractionSchema.parse(rawData)
-
-    // 5. Map to final types — values stay in RUPEES (no paise conversion here)
-    const finalItems: OcrExtractedItem[] = validatedData.items.map(item => {
-      const confidence = item.confidence ?? 1.0
-      const isFlagged = !item.productName || !item.batchNumber || !item.expiryMonth || !item.expiryYear || !item.mrp || !item.purchaseRate || confidence < 0.7
-
-      return {
-        productName: item.productName,
-        compositionName: item.compositionName || null,
-        scheduleFlag: item.scheduleFlag || 'NONE',
-        batchNumber: item.batchNumber,
-        packText: item.packText,
-        expiryMonth: item.expiryMonth,
-        expiryYear: item.expiryYear,
-        quantityPacks: item.quantityPacks || 0,
-        quantityLoose: item.quantityLoose || 0,
-        mrp: item.mrp || 0,
-        purchaseRate: item.purchaseRate || item.netRateRupees || 0,
-        netRateRupees: item.netRateRupees,
-        lineAmountRupees: item.lineAmountRupees,
-        discountPct: item.discountPct || 0,
-        gstRatePct: item.gstRatePct || 0,
-        hsnCode: item.hsnCode,
-        confidence,
-        isFlagged
-      }
-    })
+  // Map to final types — values stay in RUPEES (no paise conversion here)
+  const finalItems: OcrExtractedItem[] = parsedResult.items.map(item => {
+    const confidence = item.confidence ?? 1.0
+    const isFlagged = !item.productName || !item.batchNumber || !item.expiryMonth || !item.expiryYear || !item.mrp || !item.purchaseRate || confidence < 0.7
 
     return {
-      invoiceNumber: validatedData.invoiceNumber,
-      invoiceDate: normalizeDate(validatedData.invoiceDate),
-      vendorName: validatedData.vendorName,
-      vendorGstin: validatedData.vendorGstin,
-      vendorPhone: validatedData.vendorPhone || null,
-      vendorEmail: validatedData.vendorEmail || null,
-      vendorAddress: validatedData.vendorAddress || null,
-      totalAmount: validatedData.totalAmount || validatedData.grandTotalRupees || 0,
-      grandTotalRupees: validatedData.grandTotalRupees,
-      totalSgstRupees: validatedData.totalSgstRupees,
-      totalCgstRupees: validatedData.totalCgstRupees,
-      imagePath: archivedPath,
-      items: finalItems,
-      rawExtraction: rawData
+      productName: item.productName,
+      compositionName: item.compositionName || null,
+      scheduleFlag: item.scheduleFlag || 'NONE',
+      batchNumber: item.batchNumber,
+      packText: item.packText,
+      expiryMonth: item.expiryMonth,
+      expiryYear: item.expiryYear,
+      quantityPacks: item.quantityPacks || 0,
+      quantityLoose: item.quantityLoose || 0,
+      mrp: item.mrp || 0,
+      purchaseRate: item.purchaseRate || item.netRateRupees || 0,
+      netRateRupees: item.netRateRupees,
+      lineAmountRupees: item.lineAmountRupees,
+      discountPct: item.discountPct || 0,
+      gstRatePct: item.gstRatePct || 0,
+      hsnCode: item.hsnCode,
+      confidence,
+      isFlagged
     }
-  } catch (err: any) {
-    console.error('OCR Parsing/Validation Error:', err)
-    throw new Error('Failed to validate AI response shape: ' + err.message)
+  })
+
+  return {
+    invoiceNumber: parsedResult.invoiceNumber,
+    invoiceDate: normalizeDate(parsedResult.invoiceDate),
+    vendorName: parsedResult.vendorName,
+    vendorGstin: parsedResult.vendorGstin,
+    vendorPhone: parsedResult.vendorPhone || null,
+    vendorEmail: parsedResult.vendorEmail || null,
+    vendorAddress: parsedResult.vendorAddress || null,
+    totalAmount: parsedResult.totalAmount || parsedResult.grandTotalRupees || 0,
+    grandTotalRupees: parsedResult.grandTotalRupees,
+    totalSgstRupees: parsedResult.totalSgstRupees,
+    totalCgstRupees: parsedResult.totalCgstRupees,
+    imagePath: archivedPath,
+    items: finalItems,
+    rawExtraction: rawJsonData
   }
 }
 
