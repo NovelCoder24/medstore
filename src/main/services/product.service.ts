@@ -312,8 +312,23 @@ export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'cr
     dbData.barcode = cleanedBarcode as any
   }
 
+  const ALLOWED_COLUMNS = new Set([
+    'brand_name',
+    'generic_name',
+    'manufacturer',
+    'category',
+    'composition_id',
+    'pack_size',
+    'barcode',
+    'hsn_code',
+    'gst_rate_pct',
+    'schedule_flag',
+    'shelf_rack',
+    'is_active'
+  ])
+
   for (const [key, value] of Object.entries(dbData)) {
-    if (value !== undefined) {
+    if (ALLOWED_COLUMNS.has(key) && value !== undefined) {
       updates.push(`${key} = ?`)
       values.push(value)
     }
@@ -344,90 +359,142 @@ export interface UpdateBatchPayload {
 
 export function updateBatch(payload: UpdateBatchPayload) {
   const db = getDatabase()
-  const current = db.prepare('SELECT * FROM batches WHERE id = ?').get(payload.batchId) as any
-  if (!current) throw new Error('Batch not found')
 
-  const updates: string[] = []
-  const values: any[] = []
+  const executeUpdate = db.transaction(() => {
+    const current = db.prepare('SELECT * FROM batches WHERE id = ?').get(payload.batchId) as any
+    if (!current) throw new Error('Batch not found')
 
-  if (payload.data.batch_number !== undefined) {
-    updates.push('batch_number = ?')
-    values.push(payload.data.batch_number)
-  }
-  if (payload.data.expiry_date !== undefined) {
-    updates.push('expiry_date = ?')
-    values.push(payload.data.expiry_date)
-  }
-  if (payload.data.mrp_paise !== undefined) {
-    updates.push('mrp_paise = ?')
-    values.push(payload.data.mrp_paise)
-  }
-  if (payload.data.purchase_rate_paise !== undefined) {
-    updates.push('purchase_rate_paise = ?')
-    values.push(payload.data.purchase_rate_paise)
-  }
-  if (payload.data.quantity !== undefined) {
-    updates.push('quantity = ?')
-    values.push(payload.data.quantity)
-  }
-  if (payload.data.gst_rate_pct !== undefined) {
-    updates.push('gst_rate_pct = ?')
-    values.push(payload.data.gst_rate_pct)
-  }
-  if (payload.data.vendor_id !== undefined) {
-    updates.push('vendor_id = ?')
-    values.push(payload.data.vendor_id)
-  }
+    const updates: string[] = []
+    const values: any[] = []
 
-  if (updates.length > 0) {
-    values.push(payload.batchId)
-    db.prepare(`UPDATE batches SET ${updates.join(', ')} WHERE id = ?`).run(...values)
-  }
+    if (payload.data.batch_number !== undefined) {
+      updates.push('batch_number = ?')
+      values.push(payload.data.batch_number)
+    }
+    if (payload.data.expiry_date !== undefined) {
+      updates.push('expiry_date = ?')
+      values.push(payload.data.expiry_date)
+    }
+    if (payload.data.mrp_paise !== undefined) {
+      updates.push('mrp_paise = ?')
+      values.push(payload.data.mrp_paise)
+    }
+    if (payload.data.purchase_rate_paise !== undefined) {
+      updates.push('purchase_rate_paise = ?')
+      values.push(payload.data.purchase_rate_paise)
+    }
+    if (payload.data.quantity !== undefined) {
+      const newQty = payload.data.quantity
+      const currentQty = current.quantity || 0
+      const delta = newQty - currentQty
 
-  const updated = db.prepare('SELECT * FROM batches WHERE id = ?').get(payload.batchId)
-  
-  try {
-    logAuditAction({
-      actorUserId: payload.actorUserId || 1,
-      action: 'BATCH_UPDATE',
-      entityType: 'BATCH',
-      entityId: payload.batchId,
-      entityName: current.batch_number,
-      beforeJson: current,
-      afterJson: updated,
-      reason: payload.reason
-    })
-  } catch (err) {
-    console.error('Failed to log audit for batch update:', err)
-  }
+      if (delta !== 0) {
+        // Record stock ledger adjustment (Issue 3)
+        db.prepare(`
+          INSERT INTO stock_ledger (
+            batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
+          ) VALUES (?, 'ADJUSTMENT', ?, ?, ?, ?)
+        `).run(
+          payload.batchId,
+          delta,
+          payload.actorUserId || 1,
+          payload.reason || 'Manual Batch Quantity Adjustment',
+          `BATCH_ADJUSTMENT-${payload.batchId}`
+        )
+      }
 
-  return updated
+      updates.push('quantity = ?')
+      values.push(newQty)
+    }
+    if (payload.data.gst_rate_pct !== undefined) {
+      updates.push('gst_rate_pct = ?')
+      values.push(payload.data.gst_rate_pct)
+    }
+    if (payload.data.vendor_id !== undefined) {
+      updates.push('vendor_id = ?')
+      values.push(payload.data.vendor_id)
+    }
+
+    if (updates.length > 0) {
+      values.push(payload.batchId)
+      db.prepare(`UPDATE batches SET ${updates.join(', ')} WHERE id = ?`).run(...values)
+    }
+
+    const updated = db.prepare('SELECT * FROM batches WHERE id = ?').get(payload.batchId)
+    
+    try {
+      logAuditAction({
+        actorUserId: payload.actorUserId || 1,
+        action: 'BATCH_UPDATE',
+        entityType: 'BATCH',
+        entityId: payload.batchId,
+        entityName: current.batch_number,
+        beforeJson: current,
+        afterJson: updated,
+        reason: payload.reason
+      }, db)
+    } catch (err) {
+      console.error('Failed to log audit for batch update:', err)
+    }
+
+    return updated
+  })
+
+  return executeUpdate()
 }
 
 export function updateBatchStatus(batchId: number, newStatus: string, actorUserId: number, reason: string) {
   const db = getDatabase()
-  const current = db.prepare('SELECT * FROM batches WHERE id = ?').get(batchId) as any
-  if (!current) throw new Error('Batch not found')
 
-  db.prepare('UPDATE batches SET status = ? WHERE id = ?').run(newStatus, batchId)
-  const updated = db.prepare('SELECT * FROM batches WHERE id = ?').get(batchId)
+  const executeStatusUpdate = db.transaction(() => {
+    const current = db.prepare('SELECT * FROM batches WHERE id = ?').get(batchId) as any
+    if (!current) throw new Error('Batch not found')
 
-  try {
-    logAuditAction({
-      actorUserId: actorUserId || 1,
-      action: 'BATCH_STATUS_CHANGE',
-      entityType: 'BATCH',
-      entityId: batchId,
-      entityName: current.batch_number,
-      beforeJson: current,
-      afterJson: updated,
-      reason
-    })
-  } catch (err) {
-    console.error('Failed to log audit for batch status change:', err)
-  }
+    const zeroingStatuses = ['DISPOSED', 'EXPIRED', 'RETURNED']
+    const shouldZeroQuantity = zeroingStatuses.includes(newStatus) && current.quantity > 0
 
-  return updated
+    if (shouldZeroQuantity) {
+      // Issue 2: Zero quantity and write compensating stock ledger entry
+      const movementType = newStatus === 'EXPIRED' ? 'EXPIRY_BLOCK' : (newStatus === 'RETURNED' ? 'RETURN_OUT' : 'DISPOSAL')
+      db.prepare(`
+        INSERT INTO stock_ledger (
+          batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        batchId,
+        movementType,
+        -current.quantity,
+        actorUserId || 1,
+        reason || `Batch status changed to ${newStatus}`,
+        `BATCH_STATUS-${batchId}`
+      )
+
+      db.prepare('UPDATE batches SET status = ?, quantity = 0 WHERE id = ?').run(newStatus, batchId)
+    } else {
+      db.prepare('UPDATE batches SET status = ? WHERE id = ?').run(newStatus, batchId)
+    }
+
+    const updated = db.prepare('SELECT * FROM batches WHERE id = ?').get(batchId)
+
+    try {
+      logAuditAction({
+        actorUserId: actorUserId || 1,
+        action: 'BATCH_STATUS_CHANGE',
+        entityType: 'BATCH',
+        entityId: batchId,
+        entityName: current.batch_number,
+        beforeJson: current,
+        afterJson: updated,
+        reason
+      }, db)
+    } catch (err) {
+      console.error('Failed to log audit for batch status change:', err)
+    }
+
+    return updated
+  })
+
+  return executeStatusUpdate()
 }
 
 export function deleteBatch(batchId: number, actorUserId?: number, reason?: string) {

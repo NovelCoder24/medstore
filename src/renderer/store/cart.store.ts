@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { calculateItemGst, aggregateGst, GstBreakdown } from '../../shared/utils/gst'
 import type { Paise } from '../../shared/utils/paise'
+import { IPC_CHANNELS } from '../../shared/ipc-channels'
 
 export interface CartLineItem {
   id: string // unique id for UI rendering
@@ -42,8 +43,10 @@ interface CartState {
   // Actions
   addItem: (item: Omit<CartLineItem, 'id' | 'gstBreakdown'>) => void
   updateQuantity: (id: string, quantityUnits: number) => void
+  updateDiscount: (id: string, discountPaise: number) => void
   updateTotal: (id: string, totalPaise: number) => void
   changeBatch: (id: string, batch: { batchId: number; batchNumber: string; expiryDate: string; availableQuantity: number; mrpPaise: number; purchaseRatePaise: number }) => void
+  refreshBatchQuantities: () => Promise<void>
   removeItem: (id: string) => void
   updatePatient: (patient: Partial<PatientDetails>) => void
   clearCart: () => void
@@ -199,6 +202,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             mrpPaise: unitMrp as any,
             purchaseRatePaise: unitPurchaseRate as any,
             salePricePaise: unitMrp as any,
+            discountPaise: 0 as any, // Issue 6: Reset discount on batch change
             quantityUnits: newQty,
           }
 
@@ -206,7 +210,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             ...updated,
             gstBreakdown: calculateItemGst(
               updated.salePricePaise,
-              updated.discountPaise,
+              0 as any,
               newQty,
               updated.gstRatePct,
               updated.isInterState
@@ -216,6 +220,53 @@ export const useCartStore = create<CartState>((set, get) => ({
         return item
       })
     }))
+  },
+
+  refreshBatchQuantities: async () => {
+    const { items } = get()
+    if (items.length === 0) return
+
+    try {
+      const productIds = Array.from(new Set(items.map(i => i.productId)))
+      const batchStockMap = new Map<number, number>()
+
+      for (const pId of productIds) {
+        const batches = await window.api.invoke(IPC_CHANNELS.BATCHES_LIST_BY_PRODUCT, pId)
+        if (Array.isArray(batches)) {
+          batches.forEach((b: any) => {
+            batchStockMap.set(b.id, b.quantity ?? 0)
+          })
+        }
+      }
+
+      set((state) => {
+        let hasChanges = false
+        const updatedItems = state.items.map(item => {
+          const freshQty = batchStockMap.get(item.batchId)
+          if (freshQty !== undefined && freshQty !== item.availableQuantity) {
+            hasChanges = true
+            const safeQty = Math.min(item.quantityUnits, freshQty)
+            return {
+              ...item,
+              availableQuantity: freshQty,
+              quantityUnits: Math.max(1, safeQty),
+              gstBreakdown: calculateItemGst(
+                item.salePricePaise,
+                item.discountPaise,
+                Math.max(1, safeQty),
+                item.gstRatePct,
+                item.isInterState
+              )
+            }
+          }
+          return item
+        })
+
+        return hasChanges ? { items: updatedItems } : state
+      })
+    } catch (err) {
+      console.warn('Failed to refresh batch quantities:', err)
+    }
   },
 
   removeItem: (id) => {

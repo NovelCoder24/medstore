@@ -15,7 +15,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
   const queryClient = useQueryClient()
-  const { items, patient, getTotals, clearCart, updatePatient } = useCartStore()
+  const { items, patient, getTotals, clearCart, updatePatient, refreshBatchQuantities } = useCartStore()
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +34,13 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
 
   const [isPrinting, setIsPrinting] = useState(false)
   const isPrintingRef = React.useRef(false)
+
+  // Issue 7: Re-fetch batch quantities whenever Checkout Modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      refreshBatchQuantities()
+    }
+  }, [isOpen, refreshBatchQuantities])
 
   const triggerPrint = React.useCallback(async (dataToPrint?: { sale: any, items: any[] } | null) => {
     const target = dataToPrint || lastReceiptData
@@ -106,6 +113,15 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
     setError(null)
 
     try {
+      // Re-verify stock levels right before submitting checkout
+      await refreshBatchQuantities()
+      const freshItems = useCartStore.getState().items
+      const outOfStockItem = freshItems.find(i => i.quantityUnits > i.availableQuantity)
+      if (outOfStockItem) {
+        setError(`Insufficient stock for ${outOfStockItem.brandName} (Batch ${outOfStockItem.batchNumber}). Requested: ${outOfStockItem.quantityUnits}, Available: ${outOfStockItem.availableQuantity}`)
+        setLoading(false)
+        return
+      }
       const payload = {
         userId: user.id,
         patientName: patient.name,

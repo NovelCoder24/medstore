@@ -5,6 +5,7 @@ import {
   ShoppingCart, Truck, History, Pill, BadgeCheck, FileText, Settings 
 } from 'lucide-react'
 import { ErrorBoundary } from './ErrorBoundary'
+import { UpdateNotification } from './UpdateNotification'
 import appIcon from '../../assets/icon.ico'
 
 const mainNavItems = [
@@ -149,6 +150,9 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
             {children}
           </ErrorBoundary>
         </div>
+
+        {/* Global In-App Update Notifications */}
+        <UpdateNotification />
       </main>
     </div>
   )

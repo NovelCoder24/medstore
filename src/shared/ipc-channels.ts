@@ -122,7 +122,11 @@ export const IPC_CHANNELS = {
   BACKUP_CREATE: 'backup:create',
   BACKUP_RESTORE: 'backup:restore',
   BACKUP_LIST: 'backup:list',
-  BACKUP_PROGRESS: 'backup:progress'
+  BACKUP_PROGRESS: 'backup:progress',
+
+  // ── Auto Updater ──
+  UPDATER_STATUS: 'updater:status',
+  UPDATER_QUIT_AND_INSTALL: 'updater:quitAndInstall'
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
