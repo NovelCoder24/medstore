@@ -64,9 +64,6 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
                 <div className="text-xs font-semibold text-white truncate">
                   {user?.display_name || user?.username || 'Pharmacist'}
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">
-                  {isOwner() ? 'Central Branch (Owner)' : 'Cashier Staff'}
-                </div>
               </div>
             </div>
             <button
