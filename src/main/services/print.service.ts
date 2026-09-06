@@ -38,7 +38,7 @@ Handlebars.registerHelper('invoiceDate', function (dateStr) {
         const year = d.getFullYear()
         return `${day}/${month}/${year}`
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   const d = new Date()
   const day = d.getDate().toString().padStart(2, '0')
@@ -54,7 +54,7 @@ Handlebars.registerHelper('invoiceTime', function (dateStr) {
       if (!isNaN(d.getTime())) {
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 })
@@ -716,7 +716,7 @@ export async function showInvoicePrintPreview(htmlContent: string, billNumber: s
     if (activePreviewWindow && !activePreviewWindow.isDestroyed()) {
       try {
         activePreviewWindow.close()
-      } catch (e) {}
+      } catch (e) { }
       activePreviewWindow = null
     }
 
@@ -833,7 +833,7 @@ export async function generatePdf(htmlContent: string, outputFilename: string, p
         } catch (e) {
           try {
             printWindow.destroy()
-          } catch (d) {}
+          } catch (d) { }
         }
       }
     }
@@ -882,40 +882,11 @@ export async function generatePdf(htmlContent: string, outputFilename: string, p
 }
 
 /**
- * Ensures the editable template file exists in Documents/MedStore/Templates/invoice.hbs
- * and opens it in the system editor.
- */
-export function openInvoiceTemplateFile(): string {
-  const documentsPath = app.getPath('documents')
-  const templatesDir = path.join(documentsPath, 'MedStore', 'Templates')
-  const templatePath = path.join(templatesDir, 'invoice.hbs')
-
-  if (!fs.existsSync(templatesDir)) {
-    fs.mkdirSync(templatesDir, { recursive: true })
-  }
-
-  if (!fs.existsSync(templatePath)) {
-    fs.writeFileSync(templatePath, DEFAULT_A4_INVOICE_TEMPLATE, 'utf8')
-  }
-
-  shell.openPath(templatePath)
-  return templatePath
-}
-
-/**
  * Previews a sample invoice with current store settings
  */
 export async function previewSampleInvoice(): Promise<boolean> {
-  const documentsPath = app.getPath('documents')
-  const templatePath = path.join(documentsPath, 'MedStore', 'Templates', 'invoice.hbs')
-
-  let templateStr = DEFAULT_A4_INVOICE_TEMPLATE
-  if (fs.existsSync(templatePath)) {
-    templateStr = fs.readFileSync(templatePath, 'utf8')
-  }
-
   const storeSettings = getStoreHeaderSettings()
-  const template = Handlebars.compile(templateStr)
+  const template = Handlebars.compile(DEFAULT_A4_INVOICE_TEMPLATE)
 
   const sampleSale = {
     billNumber: 'MED-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-0001',
@@ -961,16 +932,8 @@ export async function previewSampleInvoice(): Promise<boolean> {
 export function registerPrintHandlers() {
   ipcMain.handle(IPC_CHANNELS.PRINT_RECEIPT, async (_, saleData: any, itemsData: any[]) => {
     try {
-      const documentsPath = app.getPath('documents')
-      const templatePath = path.join(documentsPath, 'MedStore', 'Templates', 'invoice.hbs')
-
-      let templateStr = DEFAULT_A4_INVOICE_TEMPLATE
-      if (fs.existsSync(templatePath)) {
-        templateStr = fs.readFileSync(templatePath, 'utf8')
-      }
-
       const storeSettings = getStoreHeaderSettings()
-      const template = Handlebars.compile(templateStr)
+      const template = Handlebars.compile(DEFAULT_A4_INVOICE_TEMPLATE)
       const html = template({ sale: saleData, items: itemsData, store: storeSettings })
 
       const pdfFilename = `Invoices/${saleData.billNumber}.pdf`
@@ -985,10 +948,6 @@ export function registerPrintHandlers() {
 
   ipcMain.handle(IPC_CHANNELS.PRINT_PDF, async (_, htmlContent: string, filename: string, options?: any) => {
     return generatePdf(htmlContent, filename, options)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.PRINT_OPEN_TEMPLATE, () => {
-    return openInvoiceTemplateFile()
   })
 
   ipcMain.handle(IPC_CHANNELS.PRINT_PREVIEW_SAMPLE, () => {

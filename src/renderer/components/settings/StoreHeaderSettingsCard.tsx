@@ -259,21 +259,6 @@ export function StoreHeaderSettingsCard() {
                     type="button"
                     onClick={async () => {
                       try {
-                        await window.api.invoke(IPC_CHANNELS.PRINT_OPEN_TEMPLATE)
-                      } catch (err: any) {
-                        setError(err.message || 'Failed to open template file.')
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold border border-slate-200 transition"
-                    title="Open invoice.hbs in your system text editor"
-                  >
-                    📄 Edit Template (.hbs)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
                         await window.api.invoke(IPC_CHANNELS.PRINT_PREVIEW_SAMPLE)
                       } catch (err: any) {
                         setError(err.message || 'Failed to open preview.')
@@ -294,7 +279,7 @@ export function StoreHeaderSettingsCard() {
             )}
 
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500">
-              💡 <strong>Smart Invoice Layout:</strong> If GSTIN, Drug License, or Bank Account are left blank, they will automatically be omitted from the Cash Memo / Tax Invoice without empty placeholders. You can also customize the layout directly by editing <code className="text-slate-800 font-mono font-semibold">Documents/MedStore/Templates/invoice.hbs</code>.
+              💡 <strong>Smart Invoice Layout:</strong> If GSTIN, Drug License, or Bank Account are left blank, they will automatically be omitted from the Cash Memo / Tax Invoice without empty placeholders.
             </div>
           </form>
         )}
