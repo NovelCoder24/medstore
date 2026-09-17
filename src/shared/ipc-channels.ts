@@ -63,6 +63,7 @@ export const IPC_CHANNELS = {
   PURCHASES_CREATE: 'purchases:create',
   PURCHASES_LIST: 'purchases:list',
   PURCHASES_GET: 'purchases:get',
+  PURCHASES_CHECK_EXISTS: 'purchases:check-exists',
   PURCHASES_APPROVE_OCR: 'purchases:approve-ocr',
 
   // ── Expiry (Phase 2) ──
@@ -88,6 +89,17 @@ export const IPC_CHANNELS = {
   // ── OCR (Phase 5) ──
   OCR_EXTRACT: 'ocr:extract',
   OCR_GET_EXTRACTION: 'ocr:get-extraction',
+  OCR_GET_DAILY_USAGE: 'ocr:get-daily-usage',
+  OCR_QUEUE_ENQUEUE: 'ocr-queue:enqueue',
+  OCR_QUEUE_LIST: 'ocr-queue:list',
+  OCR_QUEUE_GET: 'ocr-queue:get',
+  OCR_QUEUE_GET_FILE: 'ocr-queue:get-file',
+  OCR_QUEUE_DELETE: 'ocr-queue:delete',
+  OCR_QUEUE_RETRY: 'ocr-queue:retry',
+  OCR_QUEUE_UPDATE_STATUS: 'ocr-queue:update-status',
+  OCR_QUEUE_CLEAR_COMPLETED: 'ocr-queue:clear-completed',
+  OCR_QUEUE_UPDATED: 'ocr-queue:updated',
+  OCR_QUEUE_PROGRESS: 'ocr-queue:progress',
 
   // ── Reports (Phase 6) ──
   REPORTS_DAILY_SUMMARY: 'reports:daily-summary',
@@ -106,6 +118,7 @@ export const IPC_CHANNELS = {
 
   // ── Customers (Khata) (Phase 7) ──
   CUSTOMERS_CREATE: 'customers:create',
+  CUSTOMERS_UPDATE: 'customers:update',
   CUSTOMERS_SEARCH: 'customers:search',
   CUSTOMERS_GET: 'customers:get',
   CUSTOMERS_LEDGER: 'customers:ledger',

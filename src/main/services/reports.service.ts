@@ -2,7 +2,7 @@ import { ipcMain, app } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { join } from 'path'
 import { Worker } from 'worker_threads'
-import { APP_DEFAULTS } from '../../shared/constants'
+import { getDatabasePath } from './db.service'
 
 // Note: In production (packaged electron app), workers need to be compiled.
 const isProd = app.isPackaged
@@ -16,8 +16,7 @@ const scheduleRegisterWorkerPath = isProd
 
 export function getGSTR1(month: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const dbDir = app.getPath('userData')
-    const dbPath = join(dbDir, 'data', APP_DEFAULTS.DB_FILENAME)
+    const dbPath = getDatabasePath()
 
     const worker = new Worker(workerPath, {
       workerData: { dbPath, month }
@@ -40,8 +39,7 @@ export function getGSTR1(month: string): Promise<string> {
 
 export function getScheduleRegister(startDate: string, endDate: string): Promise<{ data: any[], csvContent: string }> {
   return new Promise((resolve, reject) => {
-    const dbDir = app.getPath('userData')
-    const dbPath = join(dbDir, 'data', APP_DEFAULTS.DB_FILENAME)
+    const dbPath = getDatabasePath()
 
     const worker = new Worker(scheduleRegisterWorkerPath, {
       workerData: { dbPath, startDate, endDate }

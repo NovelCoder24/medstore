@@ -15,10 +15,11 @@ interface ImportWorkerData {
 const data = workerData as ImportWorkerData
 
 function runImport() {
-  const db = new Database(data.dbPath)
+  const db = new Database(data.dbPath, { fileMustExist: true })
   
-  // We use WAL mode so this read/write doesn't fully lock the main thread, 
-  // but it's isolated anyway.
+  // Enforce WAL mode and a busy timeout so write contention with main process doesn't cause SQLITE_BUSY
+  db.pragma('journal_mode = WAL')
+  db.pragma('busy_timeout = 5000')
   
   try {
     const fileContent = fs.readFileSync(data.csvPath, 'utf-8')

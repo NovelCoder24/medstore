@@ -378,17 +378,52 @@ export function processSalesReturn(saleId: number, userId: number, reason: strin
   return executeReturn()
 }
 
-export function listSales(limit = 100): any[] {
+export interface SalesListFilters {
+  startDate?: string
+  endDate?: string
+  start?: string
+  end?: string
+  limit?: number
+  search?: string
+}
+
+export function listSales(filters?: SalesListFilters): any[] {
   const db = getDatabase()
+  const whereClauses: string[] = []
+  const params: any[] = []
+
+  const sDate = filters?.startDate || filters?.start
+  const eDate = filters?.endDate || filters?.end
+
+  if (sDate) {
+    whereClauses.push(`s.created_at >= ?`)
+    params.push(sDate.includes(' ') || sDate.includes('T') ? sDate : `${sDate} 00:00:00`)
+  }
+
+  if (eDate) {
+    whereClauses.push(`s.created_at <= ?`)
+    params.push(eDate.includes(' ') || eDate.includes('T') ? eDate : `${eDate} 23:59:59`)
+  }
+
+  if (filters?.search && filters.search.trim()) {
+    const q = `%${filters.search.trim()}%`
+    whereClauses.push(`(s.bill_number LIKE ? OR s.customer_name LIKE ? OR s.customer_mobile LIKE ?)`)
+    params.push(q, q, q)
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : ''
+  const limit = filters?.limit ?? 500
+
   const sales = db.prepare(`
     SELECT 
       s.id, s.bill_number, s.customer_name, s.customer_mobile, s.payment_mode, 
       s.total_paise, s.created_at, u.display_name as cashier_name
     FROM sales s
     LEFT JOIN users u ON s.cashier_id = u.id
+    ${whereSql}
     ORDER BY s.created_at DESC
     LIMIT ?
-  `).all(limit) as any[]
+  `).all(...params, limit) as any[]
 
   const getItems = db.prepare(`
     SELECT si.id as saleItemId, si.quantity, si.unit_price_paise, si.total_paise, 
@@ -424,8 +459,8 @@ export function registerSalesHandlers() {
     return processSalesReturn(saleId, userId, reason, items)
   })
 
-  ipcMain.handle(IPC_CHANNELS.SALES_LIST, () => {
-    return listSales()
+  ipcMain.handle(IPC_CHANNELS.SALES_LIST, (_, filters?: SalesListFilters) => {
+    return listSales(filters)
   })
 
   ipcMain.handle(IPC_CHANNELS.BATCHES_LIST_BY_PRODUCT, (_, productId: number) => {

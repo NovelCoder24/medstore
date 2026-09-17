@@ -3,14 +3,31 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { GoogleGenAI, Type } from '@google/genai'
 import * as fs from 'fs'
 import * as path from 'path'
-import { getSecretSetting, getSetting } from './settings.service'
+import { getSecretSetting, getSetting, setSetting } from './settings.service'
 import { getVendorOcrProfile, buildVendorContextPromptBlock } from './vendor-ocr-profile.service'
 import { z } from 'zod'
 import crypto from 'crypto'
-import type { OcrExtractionResult, OcrExtractedItem } from '../../shared/types'
+import type { OcrExtractionResult, OcrExtractedItem, DailyOcrUsage } from '../../shared/types'
 
 // The fallback model to use if the user's selected model fails
 const FALLBACK_MODEL = 'gemini-3.5-flash'
+
+// Daily rate-limiting guardrails
+export const DAILY_WARN_THRESHOLD = 40  // warn at 40 of ~50 estimated daily free requests
+export const DAILY_HARD_LIMIT = 55      // hard stop to prevent account-level throttling
+
+export function getDailyOcrUsage(): DailyOcrUsage {
+  const today = new Date().toISOString().slice(0, 10)
+  const countKey = `OCR_COUNT_${today}`
+  const count = parseInt(getSetting(countKey) || '0', 10)
+  return {
+    count,
+    limit: DAILY_HARD_LIMIT,
+    warnThreshold: DAILY_WARN_THRESHOLD,
+    isApproachingLimit: count >= DAILY_WARN_THRESHOLD,
+    isAtLimit: count >= DAILY_HARD_LIMIT
+  }
+}
 
 // ── Helpers ──
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -56,12 +73,14 @@ const OcrItemSchema = z.object({
   expiryYear: z.number().nullable().default(null),
   quantityPacks: z.number().nullable().default(0),
   quantityLoose: z.number().nullable().default(0),
+  freeQuantity: z.number().nullable().optional(),
   mrp: z.number().nullable().default(0),
   purchaseRate: z.number().nullable().default(0),
   discountPct: z.number().nullable().default(0),
   gstRatePct: z.number().nullable().default(0),
   hsnCode: z.string().nullable().default(null),
   confidence: z.number().nullable().default(1.0),
+  imageClarityReason: z.string().nullable().default(null),
   netRateRupees: z.number().nullable().default(null),
   lineAmountRupees: z.number().nullable().default(null)
 })
@@ -86,7 +105,7 @@ const OcrExtractionSchema = z.object({
  * High-res smartphone camera photos (5-8MB) are downscaled (max 2000px) and compressed
  * to JPEG 75% quality (~150KB-250KB), providing 95% disk savings with zero text readability loss.
  */
-function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string): string {
+export function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string): string {
   const userDataPath = app.getPath('userData')
   const invoicesDir = path.join(userDataPath, 'invoices')
 
@@ -104,8 +123,8 @@ function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string)
         const size = img.getSize()
         let processed = img
 
-        // If photo exceeds 2000px max dimension, downscale proportionally
-        const MAX_DIM = 2000
+        // If photo exceeds 1400px max dimension, downscale proportionally
+        const MAX_DIM = 1400
         if (size.width > MAX_DIM || size.height > MAX_DIM) {
           if (size.width >= size.height) {
             processed = img.resize({ width: MAX_DIM })
@@ -114,8 +133,8 @@ function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string)
           }
         }
 
-        // Compress to JPEG 75% quality
-        const compressedBuffer = processed.toJPEG(75)
+        // Compress to JPEG 65% quality — sharp text readability on printed invoices with ~50% token reduction
+        const compressedBuffer = processed.toJPEG(65)
         const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.jpg`
         const filePath = path.join(invoicesDir, filename)
 
@@ -137,6 +156,26 @@ function archiveInvoiceImage(buffer: ArrayBuffer | Uint8Array, mimeType: string)
   return filePath
 }
 
+// Module-level constant — byte-identical across every invoice call to enable Gemini prefix/system caching
+const SYSTEM_INSTRUCTION = `You are an OCR assistant for Indian pharmacy wholesaler invoices. Fill the JSON schema exactly.
+
+VENDOR (page header):
+- Seller = header company (e.g. "UNICARE"). The "M/s"/"To:" line is the BUYER — never vendorName.
+- Extract vendorPhone, vendorEmail, vendorAddress from the header. invoiceDate strictly YYYY-MM-DD.
+
+ITEMS:
+- productName: Item Name/Particulars column only. Exclude distributor codes ("Com."/"Class"/"CND": "LEEFO", "8697").
+- packText: exact Pack column text ("10'S", "1X15", "60GM"). Never merge pack into productName.
+- quantityPacks: billed Qty. quantityLoose: free column ("Fr", "Free", "DISQTY").
+- batchNumber: copy exactly; 5/S, 0/O, 8/B, 1/I are easily confused — inspect closely.
+- Expiry "8/27" → expiryMonth=8, expiryYear=2027.
+- "Rate" → purchaseRate; "N.Rate" → netRateRupees; single column → purchaseRate. Never round.
+- grandTotalRupees: the GRAND TOTAL / NET AMT line — never miss it.
+- compositionName: infer salts + strengths ("AUGMENTIN 625" → "Amoxicillin 500mg + Clavulanic Acid 125mg").
+- scheduleFlag: "H", "H1", "X", or "NONE".
+
+CONFIDENCE: any row field blurry/faint/cut off/ambiguous → confidence 0.50–0.75, imageClarityReason = max 5 words ("batch blurry"). Crisp row → 0.90–1.0, null.`
+
 /**
  * Extracts structured pharmacy invoice data from an image using Gemini.
  * @param vendorHint Optional context if the vendor is already known (e.g. re-scan from a dropdown)
@@ -149,6 +188,18 @@ export async function extractInvoiceData(
 
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not set. Please configure it in settings.')
+  }
+
+  // Daily quota guardrail check
+  const today = new Date().toISOString().slice(0, 10)
+  const countKey = `OCR_COUNT_${today}`
+  const todayCount = parseInt(getSetting(countKey) || '0', 10)
+
+  if (todayCount >= DAILY_HARD_LIMIT) {
+    throw new Error(`Daily AI quota limit reached (${todayCount}/${DAILY_HARD_LIMIT} requests today). Please use manual entry or try again tomorrow.`)
+  }
+  if (todayCount >= DAILY_WARN_THRESHOLD) {
+    console.warn(`[OCR] Approaching daily limit: ${todayCount}/${DAILY_HARD_LIMIT} requests used today`)
   }
 
   // 1. Archive & compress original image to disk
@@ -165,50 +216,8 @@ export async function extractInvoiceData(
 
   const ai = new GoogleGenAI({ apiKey })
 
-  const prompt = `
-    You are an expert OCR assistant for an Indian retail pharmacy wholesaler invoice.
-    Extract every field into the exact JSON schema provided.
-
-    VENDOR IDENTIFICATION & CONTACT DETAILS (CRITICAL):
-    - The vendor/seller is the company in the HEADER (top of page). 
-    - Examples from training data: "UNICARE", "JAIN MEDICAL & SURGICAL", "SHREE RAM AGENCIES".
-    - The "M/s" or "To:" line (e.g., "SHIV SHAKTI MEDICAL STORES") is the BUYER. NEVER extract the buyer as vendorName.
-    - Extract vendor Phone Number into vendorPhone (e.g., "9826123456" or "0788-223456").
-    - Extract vendor Email into vendorEmail if present.
-    - Extract vendor Physical Address into vendorAddress if printed in header.
-    - Format invoiceDate strictly as YYYY-MM-DD (e.g., 2023-10-24).
-
-    PACKING & QUANTITIES (CRITICAL FOR INVENTORY MATH):
-    - Look for a dedicated column named "Pack", "Packing", or similar. 
-    - Extract EXACTLY what is printed into packText (Examples: "10'S", "1X15", "3ML", "60GM", "450ML"). Do NOT put the pack size into the productName if a dedicated Pack column exists.
-    - quantityPacks is the main billed quantity (Usually under "Qty").
-    - quantityLoose is for items given for free (Usually under "Fr", "Free", or "DISQTY").
-
-    BATCH & EXPIRY:
-    - Batch numbers are highly error-prone (e.g., distinguishing '5' vs 'S', '0' vs 'O'). Look closely.
-    - Expiry (Exp): convert MM/YY to integer month and year. Example: "8/27" -> Month: 8, Year: 2027. "01/29" -> Month: 1, Year: 2029.
-
-    PRICING & RATES (READ CAREFULLY):
-    - "Rate" is the base price. Map this to purchaseRate.
-    - "N.Rate" or "Net Rate" is the price after discount. Map this to netRateRupees.
-    - If only one Rate column exists, map it to purchaseRate.
-    - "totalAmount" MUST be the final Grand Total of the invoice (e.g., "GRAND TOTAL", "NET AMT."). Do not miss this.
-    - Extract numbers exactly as printed (e.g., 89.06). Do not round.
-
-    PRODUCT NAMES, COMPOSITION & SCHEDULE INFERENCE:
-    - DISTRIBUTOR CODES: Often, there is a column (labeled "Com.", "Class", or "CND") containing short uppercase codes (like "LEEFO", "8697") placed right next to the Item Name. DO NOT include these codes in the productName.
-    - Extract productName from ONLY the actual Item Name/Particulars/Product column.
-    - COMPOSITION INFERENCE: Using your internal pharmaceutical knowledge, infer the active salt composition and strength for the product name (e.g., "ALCINAC-RB" -> "Aceclofenac 100mg + Rabeprazole 20mg", "AUGMENTIN 625" -> "Amoxicillin 500mg + Clavulanic Acid 125mg"). Set compositionName.
-    - SCHEDULE INFERENCE: Infer the Indian Drug Schedule flag for this product ("H", "H1", "X", or "NONE"). Set scheduleFlag.
-
-    CONFIDENCE SCORE (0.0 to 1.0):
-    - Assess your certainty for each row. If the image is blurry, folded, or a batch number is ambiguous (like guessing between a 5 or an S), score it below 0.7. Do not default to 1.0 unless perfectly legible.
-  `
-
-  // 3. Inject vendor-specific context if profile exists
-  const fullPrompt = vendorContextBlock
-    ? prompt + '\n\n' + vendorContextBlock
-    : prompt
+  // User message text: inject dynamic vendor hints or default prompt instruction
+  const userText = vendorContextBlock ? vendorContextBlock : 'Extract this pharmacy invoice.'
 
   // Determine user's preferred model, default to fast gemini-3.7-flash
   const preferredModel = getSetting('GEMINI_MODEL') || 'gemini-3.7-flash'
@@ -244,12 +253,17 @@ export async function extractInvoiceData(
           {
             role: "user",
             parts: [
-              { text: fullPrompt },
+              { text: userText },
               { inlineData: { data: base64Image, mimeType: mimeType } }
             ]
           }
         ],
         config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          ...( (modelToUse.includes('3.7') || modelToUse.includes('2.5') || modelToUse.includes('thinking'))
+            ? { thinkingConfig: { thinkingBudget: 0 } }
+            : {}
+          ),
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -277,7 +291,7 @@ export async function extractInvoiceData(
                     expiryMonth: { type: Type.INTEGER, nullable: true },
                     expiryYear: { type: Type.INTEGER, nullable: true },
                     quantityPacks: { type: Type.INTEGER, nullable: true },
-                    freeQuantity: { type: Type.INTEGER, nullable: true },
+                    quantityLoose: { type: Type.INTEGER, nullable: true },
                     mrp: { type: Type.NUMBER, nullable: true },
                     purchaseRate: { type: Type.NUMBER, nullable: true },
                     netRateRupees: { type: Type.NUMBER, nullable: true },
@@ -285,6 +299,7 @@ export async function extractInvoiceData(
                     gstRatePct: { type: Type.NUMBER, nullable: true },
                     hsnCode: { type: Type.STRING, nullable: true },
                     confidence: { type: Type.NUMBER, nullable: true },
+                    imageClarityReason: { type: Type.STRING, nullable: true },
                     lineAmountRupees: { type: Type.NUMBER, nullable: true },
                   }
                 }
@@ -298,6 +313,14 @@ export async function extractInvoiceData(
       const response: any = await Promise.race([apiCall, timeoutPromise]).finally(() => {
         clearTimeout(timeoutId!)
       })
+
+      const u = response?.usageMetadata
+      if (u) console.log(
+        `[OCR] tokens: prompt=${u.promptTokenCount} ` +
+        `(cached=${u.cachedContentTokenCount ?? 0}) ` +
+        `thoughts=${u.thoughtsTokenCount ?? 0} ` +
+        `output=${u.candidatesTokenCount} total=${u.totalTokenCount}`
+      )
 
       const responseText = response.text
       if (!responseText) throw new Error('Empty response from AI model')
@@ -317,6 +340,15 @@ export async function extractInvoiceData(
       const reason = isTimeout ? 'timeout' : (err?.message || 'unknown error')
       console.warn(`[OCR] ${label} model (${modelToUse}) failed: ${reason}`)
 
+      const msg = err?.message || ''
+      const statusCode = err?.status || err?.httpStatusCode || err?.code
+      // Quota errors are project-level — fallback will also fail
+      const isQuotaError = statusCode === 429 || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')
+      if (isQuotaError) {
+        console.warn(`[OCR] Quota exhausted — skipping fallback to preserve remaining quota`)
+        break
+      }
+
       // If there's another model to try, wait briefly and continue the loop
       if (i < modelsToTry.length - 1) {
         console.log(`[OCR] Falling back to next model...`)
@@ -330,6 +362,12 @@ export async function extractInvoiceData(
     const isTimeout = lastError?.message?.startsWith('TIMEOUT_')
     if (isTimeout) {
       throw new Error('AI service is experiencing heavy traffic. All models timed out. Please try again in a moment or use manual entry.')
+    }
+    const msg = lastError?.message || ''
+    const statusCode = lastError?.status || lastError?.httpStatusCode || lastError?.code
+    const isQuotaError = statusCode === 429 || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')
+    if (isQuotaError) {
+      throw new Error('Gemini API quota/rate limit reached (429 RESOURCE_EXHAUSTED). Please wait a moment or try again later.')
     }
     throw new Error('Failed to extract and validate AI response shape: ' + (lastError?.message || 'Unknown error'))
   }
@@ -348,7 +386,7 @@ export async function extractInvoiceData(
       expiryMonth: item.expiryMonth,
       expiryYear: item.expiryYear,
       quantityPacks: item.quantityPacks || 0,
-      quantityLoose: item.quantityLoose || 0,
+      quantityLoose: item.quantityLoose || item.freeQuantity || 0,
       mrp: item.mrp || 0,
       purchaseRate: item.purchaseRate || item.netRateRupees || 0,
       netRateRupees: item.netRateRupees,
@@ -360,6 +398,9 @@ export async function extractInvoiceData(
       isFlagged
     }
   })
+
+  // Increment daily usage count upon successful extraction
+  setSetting(countKey, String(todayCount + 1))
 
   return {
     invoiceNumber: parsedResult.invoiceNumber,
@@ -375,11 +416,20 @@ export async function extractInvoiceData(
     totalCgstRupees: parsedResult.totalCgstRupees,
     imagePath: archivedPath,
     items: finalItems,
-    rawExtraction: rawJsonData
+    rawExtraction: rawJsonData,
+    _meta: {
+      dailyRequestCount: todayCount + 1,
+      dailyLimit: DAILY_HARD_LIMIT,
+      isApproachingLimit: todayCount + 1 >= DAILY_WARN_THRESHOLD
+    }
   }
 }
 
 export function registerOcrHandlers() {
+  ipcMain.handle(IPC_CHANNELS.OCR_GET_DAILY_USAGE, () => {
+    return getDailyOcrUsage()
+  })
+
   ipcMain.handle(IPC_CHANNELS.OCR_EXTRACT, async (_, payload: {
     buffer: ArrayBuffer | Uint8Array;
     mimeType: string;

@@ -242,13 +242,13 @@ export function createProduct(data: CreateProductPayload): Product {
       payload.brand_name,
       payload.generic_name || null,
       payload.manufacturer || null,
-      payload.category,
+      payload.category || 'GENERIC',
       payload.composition_id || null,
-      payload.pack_size,
+      payload.pack_size || 1,
       cleanedBarcode,
       payload.hsn_code || null,
-      payload.gst_rate_pct,
-      payload.schedule_flag,
+      payload.gst_rate_pct ?? 12,
+      payload.schedule_flag || 'NONE',
       payload.shelf_rack || null
     )
     

@@ -17,6 +17,9 @@ describe('Paise utility', () => {
     expect(toPaise(152.5)).toBe(15250)
     expect(toPaise(10)).toBe(1000)
     expect(toPaise(0)).toBe(0)
+    expect(toPaise("152.50")).toBe(15250)
+    expect(toPaise(null)).toBe(0)
+    expect(toPaise(undefined)).toBe(0)
   })
 
   it('toRupees converts paise to rupees', () => {

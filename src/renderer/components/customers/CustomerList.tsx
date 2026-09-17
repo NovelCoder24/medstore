@@ -1,35 +1,59 @@
 import React, { useState } from 'react'
-import { useCustomers, useAcceptPayment, useCreateCustomer, useCustomerLedger } from '../../hooks/useCustomers'
+import { useCustomers, useAcceptPayment, useCreateCustomer, useUpdateCustomer, useCustomerLedger } from '../../hooks/useCustomers'
 import { formatPaise } from '../../../shared/utils/paise'
-import { Plus, IndianRupee, Search, Loader2, User, Phone, FileText, CheckCircle2, History, X } from 'lucide-react'
+import { Plus, IndianRupee, Search, Loader2, User, Phone, FileText, CheckCircle2, History, X, Pill, Edit3 } from 'lucide-react'
 
 export function CustomerList() {
   const { data: customers, isLoading } = useCustomers()
   const { mutateAsync: acceptPayment, isPending: isPaying } = useAcceptPayment()
   const { mutateAsync: createCustomer, isPending: isCreating } = useCreateCustomer()
+  const { mutateAsync: updateCustomer, isPending: isUpdating } = useUpdateCustomer()
   
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [newCustomer, setNewCustomer] = useState({ name: '', mobile: '' })
+  const [newCustomer, setNewCustomer] = useState({ name: '', mobile: '', notes: '' })
   
   const [paymentModal, setPaymentModal] = useState<{ id: number, name: string, balance: number } | null>(null)
   const [paymentAmount, setPaymentAmount] = useState('')
   const [ledgerCustomerId, setLedgerCustomerId] = useState<number | null>(null)
 
+  const [editNotesModal, setEditNotesModal] = useState<{ id: number, name: string, notes: string } | null>(null)
+  const [editNotesValue, setEditNotesValue] = useState('')
+
   const filteredCustomers = customers?.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.mobile.includes(search)
+    c.mobile.includes(search) ||
+    (c.notes && c.notes.toLowerCase().includes(search.toLowerCase()))
   )
 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCustomer.name.trim() || !newCustomer.mobile.trim()) return
     try {
-      await createCustomer({ name: newCustomer.name.trim(), mobile: newCustomer.mobile.trim() })
+      await createCustomer({ 
+        name: newCustomer.name.trim(), 
+        mobile: newCustomer.mobile.trim(),
+        notes: newCustomer.notes.trim() || undefined
+      })
       setShowAdd(false)
-      setNewCustomer({ name: '', mobile: '' })
+      setNewCustomer({ name: '', mobile: '', notes: '' })
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to add customer')
+    }
+  }
+
+  const handleSaveNotes = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editNotesModal) return
+    try {
+      await updateCustomer({
+        id: editNotesModal.id,
+        data: { notes: editNotesValue.trim() || null }
+      })
+      setEditNotesModal(null)
+      setEditNotesValue('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update patient notes')
     }
   }
 
@@ -66,7 +90,7 @@ export function CustomerList() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Patient Directory & Credit Accounts</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Manage patient histories, credit balances, and payment receipts</p>
+          <p className="text-xs text-slate-500 mt-0.5">Manage patient histories, medicine notes, credit balances, and payment receipts</p>
         </div>
         <button 
           onClick={() => setShowAdd(true)}
@@ -83,7 +107,7 @@ export function CustomerList() {
           <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search patient by name or phone number..."
+            placeholder="Search patient by name, mobile, or medicine notes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition font-medium"
@@ -126,7 +150,38 @@ export function CustomerList() {
                     </span>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  {/* Medicine Notes Section */}
+                  <div className="mt-3.5 p-2.5 rounded-xl bg-slate-50/90 border border-slate-100 group-hover:border-slate-200/80 transition">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700">
+                        <Pill className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>Medicine & Health Notes</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditNotesModal({ id: customer.id, name: customer.name, notes: customer.notes || '' })
+                          setEditNotesValue(customer.notes || '')
+                        }}
+                        className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                        title="Edit medicine notes"
+                      >
+                        <Edit3 className="w-2.5 h-2.5" />
+                        {customer.notes ? 'Edit' : '+ Add'}
+                      </button>
+                    </div>
+                    {customer.notes ? (
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed break-words line-clamp-3">
+                        {customer.notes}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">
+                        No specific medicine notes recorded
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                     <span className="text-slate-500">Credit Balance:</span>
                     <strong className={`font-bold text-sm ${hasDue ? 'text-rose-600' : 'text-emerald-600'}`}>
                       {hasDue ? formatPaise(customer.current_balance_paise) : '₹0.00 (Cleared)'}
@@ -204,6 +259,21 @@ export function CustomerList() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono" 
                 />
               </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Specific Medicines / Patient Notes <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <textarea 
+                  rows={3}
+                  placeholder="e.g. Regular Medicines: Metformin 500mg, Telmisartan 40mg. Penicillin allergy."
+                  value={newCustomer.notes} 
+                  onChange={e => setNewCustomer({...newCustomer, notes: e.target.value})} 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none font-normal text-xs resize-none" 
+                />
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Helpful for remembering chronic prescriptions, dosage instructions, or allergies.
+                </p>
+              </div>
               <div className="flex gap-2 pt-3 border-t border-slate-100">
                 <button 
                   type="button" 
@@ -218,6 +288,73 @@ export function CustomerList() {
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xs transition"
                 >
                   {isCreating ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Notes Modal */}
+      {editNotesModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                  <Pill className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Patient Medicine Notes</h3>
+                  <p className="text-xs text-slate-500">{editNotesModal.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setEditNotesModal(null)
+                  setEditNotesValue('')
+                }} 
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNotes} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Specific Medicines & Health Remarks
+                </label>
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={editNotesValue}
+                  onChange={(e) => setEditNotesValue(e.target.value)}
+                  placeholder="e.g. Needs Pantocid 40mg before breakfast, Glycomet GP1 twice daily. Regular customer for BP & Sugar medicines."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs font-normal leading-relaxed resize-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  You can quickly search for this patient by their medicine names in the search bar.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditNotesModal(null)
+                    setEditNotesValue('')
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1 transition"
+                >
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Notes'}
                 </button>
               </div>
             </form>

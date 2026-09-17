@@ -26,6 +26,10 @@ export interface PurchaseLineItem {
   totalPaise: Paise
   needsProductLink?: boolean
   ocrProductNameRaw?: string
+  confidence?: number
+  isFlagged?: boolean
+  flagReasons?: string[]
+  suggestedMatches?: Array<{ id: number; brandName: string; packSize: number }>
 }
 
 interface PurchaseState {
@@ -35,10 +39,18 @@ interface PurchaseState {
   items: PurchaseLineItem[]
   manualGrandTotalPaise: number | null
   entrySource: 'MANUAL' | 'OCR'
+  activeQueueItemId: number | null
+  invoicePreview: { dataUrl: string; mimeType: string; fileName: string } | null
+  showInvoicePreview: boolean
 
   // Actions
   setInvoiceDetails: (vendorId: number, invoiceNumber: string, invoiceDate: string, entrySource?: 'MANUAL' | 'OCR') => void
+  setActiveQueueItemId: (id: number | null) => void
+  setInvoicePreview: (preview: { dataUrl: string; mimeType: string; fileName: string } | null) => void
+  setShowInvoicePreview: (show: boolean) => void
+  toggleInvoicePreview: () => void
   addItem: (product: any) => void
+  setAllItems: (items: PurchaseLineItem[]) => void
   updateItem: (id: string, updates: Partial<PurchaseLineItem>) => void
   removeItem: (id: string) => void
   clearPurchase: () => void
@@ -59,6 +71,15 @@ export const usePurchaseStore = create<PurchaseState>((set, get) => ({
   items: [],
   manualGrandTotalPaise: null,
   entrySource: 'MANUAL',
+  activeQueueItemId: null,
+  invoicePreview: null,
+  showInvoicePreview: false,
+
+  setActiveQueueItemId: (id) => set({ activeQueueItemId: id }),
+  setInvoicePreview: (preview) => set({ invoicePreview: preview, showInvoicePreview: !!preview }),
+  setShowInvoicePreview: (show) => set({ showInvoicePreview: show }),
+  toggleInvoicePreview: () => set((state) => ({ showInvoicePreview: !state.showInvoicePreview })),
+  setAllItems: (items) => set({ items }),
 
   setManualGrandTotal: (paise) => set({ manualGrandTotalPaise: paise }),
 
@@ -90,7 +111,11 @@ export const usePurchaseStore = create<PurchaseState>((set, get) => ({
 
       totalPaise: product.totalPaise || 0,
       needsProductLink: product.needsProductLink,
-      ocrProductNameRaw: product.ocrProductNameRaw
+      ocrProductNameRaw: product.ocrProductNameRaw,
+      confidence: product.confidence,
+      isFlagged: product.isFlagged,
+      flagReasons: product.flagReasons,
+      suggestedMatches: product.suggestedMatches
     }
     set(state => ({ items: [...state.items, newItem] }))
   },
@@ -129,7 +154,10 @@ export const usePurchaseStore = create<PurchaseState>((set, get) => ({
       invoiceDate: new Date().toISOString().split('T')[0],
       items: [],
       manualGrandTotalPaise: null,
-      entrySource: 'MANUAL'
+      entrySource: 'MANUAL',
+      activeQueueItemId: null,
+      invoicePreview: null,
+      showInvoicePreview: false
     })
   },
 

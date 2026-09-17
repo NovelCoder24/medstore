@@ -11,6 +11,7 @@ import { registerSalesHandlers } from './services/sales.service'
 import { registerPurchaseHandlers } from './services/purchase.service'
 import { registerPrintHandlers } from './services/print.service'
 import { registerOcrHandlers } from './services/ocr.service'
+import { registerOcrQueueHandlers, initOcrQueue } from './services/ocr-queue.service'
 import { registerAnalyticsHandlers } from './services/analytics.service'
 import { registerSettingsHandlers } from './services/settings.service'
 import { registerAuditHandlers } from './services/audit.service'
@@ -88,6 +89,8 @@ app.whenReady().then(() => {
     registerPurchaseHandlers()
     registerPrintHandlers()
     registerOcrHandlers()
+    registerOcrQueueHandlers()
+    initOcrQueue()
     registerAnalyticsHandlers()
     registerSettingsHandlers()
     registerAuditHandlers()

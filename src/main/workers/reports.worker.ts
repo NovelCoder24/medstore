@@ -6,6 +6,7 @@ const { dbPath, month } = workerData as { dbPath: string, month: string }
 try {
   // 1. Open a fresh read-only connection to the active database
   const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  db.pragma('busy_timeout = 5000')
 
   // GSTR-1 (Sales) CSV headers
   const headers = [

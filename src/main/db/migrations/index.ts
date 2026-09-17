@@ -21,6 +21,8 @@ import * as m010 from './010_soft_delete_enforcement'
 import * as m011 from './011_sales_customer_address'
 import * as m012 from './012_vendor_unique_indexes'
 import * as m013 from './013_foreign_key_performance_indexes'
+import * as m014 from './014_ocr_queue'
+import * as m015 from './015_customer_notes'
 
 export interface Migration {
   version: number
@@ -41,7 +43,9 @@ export const migrations: Migration[] = [
   m010,
   m011,
   m012,
-  m013
+  m013,
+  m014,
+  m015
 ].sort(
   (a, b) => a.version - b.version
 )

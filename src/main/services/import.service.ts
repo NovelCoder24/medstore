@@ -2,7 +2,7 @@ import { Worker } from 'worker_threads'
 import { join } from 'path'
 import { ipcMain, app } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
-import { APP_DEFAULTS } from '../../shared/constants'
+import { getDatabasePath } from './db.service'
 
 // Note: In production (packaged electron app), workers need to be compiled.
 // electron-vite handles this if we configure it, but generally we spawn from the build output.
@@ -15,8 +15,7 @@ const workerPath = isProd
 
 export function runCsvImport(csvPath: string, onProgress: (data: any) => void): Promise<any> {
   return new Promise((resolve, reject) => {
-    const dbDir = app.getPath('userData')
-    const dbPath = join(dbDir, APP_DEFAULTS.DB_FILENAME)
+    const dbPath = getDatabasePath()
 
     const worker = new Worker(workerPath, {
       workerData: {

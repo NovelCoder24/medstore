@@ -404,9 +404,61 @@ function diffOcrExtraction(
   return diffs
 }
 
+/**
+ * Checks if a purchase invoice number already exists for a vendor or in general.
+ */
+export function checkPurchaseInvoiceExists(invoiceNumber: string, vendorId?: number | null): {
+  exists: boolean
+  invoice?: {
+    id: number
+    invoice_number: string
+    invoice_date: string
+    vendor_name: string
+  }
+} {
+  if (!invoiceNumber || !invoiceNumber.trim()) {
+    return { exists: false }
+  }
+
+  const db = getDatabase()
+  const cleanInv = invoiceNumber.trim()
+
+  if (vendorId) {
+    const row = db.prepare(`
+      SELECT pi.id, pi.invoice_number, pi.invoice_date, v.name as vendor_name
+      FROM purchase_invoices pi
+      LEFT JOIN vendors v ON v.id = pi.vendor_id
+      WHERE pi.vendor_id = ? AND UPPER(TRIM(pi.invoice_number)) = UPPER(?)
+      LIMIT 1
+    `).get(vendorId, cleanInv) as any
+
+    if (row) {
+      return { exists: true, invoice: row }
+    }
+  }
+
+  const row = db.prepare(`
+    SELECT pi.id, pi.invoice_number, pi.invoice_date, v.name as vendor_name
+    FROM purchase_invoices pi
+    LEFT JOIN vendors v ON v.id = pi.vendor_id
+    WHERE UPPER(TRIM(pi.invoice_number)) = UPPER(?)
+    LIMIT 1
+  `).get(cleanInv) as any
+
+  if (row) {
+    return { exists: true, invoice: row }
+  }
+
+  return { exists: false }
+}
+
 export function registerPurchaseHandlers() {
   ipcMain.handle(IPC_CHANNELS.PURCHASES_CREATE, (_, payload: PurchasePayload) => {
     return createPurchase(payload)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PURCHASES_CHECK_EXISTS, (_, payload: { invoiceNumber: string; vendorId?: number | null }) => {
+    return checkPurchaseInvoiceExists(payload?.invoiceNumber, payload?.vendorId)
   })
 
   ipcMain.handle(IPC_CHANNELS.PURCHASES_LIST, (_, filters) => {

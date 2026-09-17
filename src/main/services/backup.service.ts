@@ -3,14 +3,12 @@ import { join } from 'path'
 import { existsSync, mkdirSync, copyFileSync, unlinkSync, renameSync, readdirSync, statSync } from 'fs'
 import { Worker } from 'worker_threads'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
-import { getDatabase, closeDatabase, drainAndCloseDatabase } from './db.service'
+import { getDatabase, closeDatabase, drainAndCloseDatabase, getDatabasePath } from './db.service'
 import { APP_DEFAULTS } from '../../shared/constants'
 import Database from 'better-sqlite3'
 
 export async function createBackup(): Promise<string> {
-  const userDataPath = app.getPath('userData')
-  const dbDir = join(userDataPath, 'data')
-  const activeDbPath = join(dbDir, APP_DEFAULTS.DB_FILENAME)
+  const activeDbPath = getDatabasePath()
 
   // Configure backup directory (e.g. in Documents)
   const backupDir = join(app.getPath('documents'), 'medstore-backups')
@@ -98,9 +96,8 @@ export async function restoreBackup(backupFilePath: string): Promise<void> {
   }
 
   // 2. Prepare paths
-  const userDataPath = app.getPath('userData')
-  const dbDir = join(userDataPath, 'data')
-  const activeDbPath = join(dbDir, APP_DEFAULTS.DB_FILENAME)
+  const activeDbPath = getDatabasePath()
+  const dbDir = join(app.getPath('userData'), 'data')
   const walPath = `${activeDbPath}-wal`
   const shmPath = `${activeDbPath}-shm`
   const corruptedDbPath = join(dbDir, `medstore_corrupted_${Date.now()}.db`)

@@ -4,13 +4,25 @@ import { useAuthStore } from '../../store/auth.store'
 import { formatPaise } from '../../../shared/utils/paise'
 import { Search, Loader2, RotateCcw, AlertTriangle, Printer } from 'lucide-react'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { DateRangeFilter, DateFilterPreset } from '../common/DateRangeFilter'
+import { PaginationControls } from '../common/PaginationControls'
 
 export function SalesHistory() {
-  const { data: sales, isLoading } = useSalesHistory()
+  const [datePreset, setDatePreset] = useState<DateFilterPreset>('ALL')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 15
+
+  const { data: sales, isLoading } = useSalesHistory({
+    startDate,
+    endDate,
+    search: search.trim() || undefined
+  })
   const { mutateAsync: processReturn, isPending: isReturning } = useProcessReturn()
   const { user } = useAuthStore()
-  
-  const [search, setSearch] = useState('')
+
   const [returnModal, setReturnModal] = useState<any>(null)
   const [returnItems, setReturnItems] = useState<Record<number, number>>({}) // saleItemId -> qty
   const [returnReason, setReturnReason] = useState('')
@@ -19,6 +31,16 @@ export function SalesHistory() {
     s.bill_number.toLowerCase().includes(search.toLowerCase()) || 
     (s.customer_name && s.customer_name.toLowerCase().includes(search.toLowerCase()))
   )
+
+  const totalItems = filteredSales?.length || 0
+  const paginatedSales = filteredSales?.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  const handleDateChange = (preset: DateFilterPreset, start: string, end: string) => {
+    setDatePreset(preset)
+    setStartDate(start)
+    setEndDate(end)
+    setCurrentPage(1)
+  }
 
   const handleReturnInitiate = (sale: any) => {
     setReturnModal(sale)
@@ -76,22 +98,28 @@ export function SalesHistory() {
 
   return (
     <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm overflow-hidden">
-      <div className="p-4 border-b bg-card">
-        <h2 className="text-xl font-bold tracking-tight">Sales History</h2>
-        <p className="text-sm text-muted-foreground">View past bills and initiate returns</p>
-      </div>
-
-      <div className="p-4 border-b bg-card/50">
-        <div className="relative max-w-md">
+      {/* Top Filter Bar: Search + Date Presets */}
+      <div className="p-4 border-b bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div className="relative max-w-sm w-full">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search by Bill No or Customer..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border rounded-md outline-none focus:ring-2 focus:ring-primary bg-background"
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
+            className="w-full pl-9 pr-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-primary bg-background text-sm"
           />
         </div>
+
+        <DateRangeFilter
+          preset={datePreset}
+          startDate={startDate}
+          endDate={endDate}
+          onChange={handleDateChange}
+        />
       </div>
 
       <div className="flex-1 overflow-auto p-4">
@@ -107,12 +135,12 @@ export function SalesHistory() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filteredSales?.length === 0 && (
+            {totalItems === 0 && (
               <tr>
                 <td colSpan={6} className="text-center py-8 text-muted-foreground">No sales found.</td>
               </tr>
             )}
-            {filteredSales?.map(sale => {
+            {paginatedSales?.map(sale => {
               const hasReturnable = sale.items.some((i: any) => i.returnableQty > 0)
               
               return (
@@ -147,6 +175,14 @@ export function SalesHistory() {
           </tbody>
         </table>
       </div>
+
+      {/* Bottom Pagination Bar */}
+      <PaginationControls
+        currentPage={currentPage}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={setCurrentPage}
+      />
 
       {/* Return Modal */}
       {returnModal && (

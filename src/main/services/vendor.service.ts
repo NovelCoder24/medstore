@@ -14,6 +14,8 @@ export interface Vendor {
   current_balance_paise: number
   is_active?: number
   created_at: string
+  purchase_count?: number
+  last_purchased_at?: string | null
 }
 
 export interface VendorPayment {
@@ -41,7 +43,15 @@ export interface VendorLedgerEntry {
 
 export function listVendors(): Vendor[] {
   const db = getDatabase()
-  return db.prepare('SELECT * FROM vendors WHERE is_active = 1 ORDER BY name ASC').all() as Vendor[]
+  return db.prepare(`
+    SELECT 
+      v.*,
+      (SELECT COUNT(*) FROM purchase_invoices WHERE vendor_id = v.id) as purchase_count,
+      (SELECT MAX(invoice_date) FROM purchase_invoices WHERE vendor_id = v.id) as last_purchased_at
+    FROM vendors v 
+    WHERE v.is_active = 1 
+    ORDER BY v.name ASC
+  `).all() as Vendor[]
 }
 
 export function getVendor(id: number): Vendor | undefined {

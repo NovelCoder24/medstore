@@ -7,6 +7,7 @@ export interface Customer {
   name: string
   mobile: string
   address: string | null
+  notes: string | null
   current_balance_paise: number
   max_credit_limit_paise: number
   created_at: string
@@ -21,21 +22,53 @@ export interface CustomerLedgerEntry {
   created_at: string
 }
 
-export function createCustomer(data: { name: string, mobile: string, address?: string, max_credit_limit_paise?: number }): Customer {
+export function createCustomer(data: { name: string, mobile: string, address?: string, notes?: string, max_credit_limit_paise?: number }): Customer {
   const db = getDatabase()
   const existing = db.prepare('SELECT id FROM customers WHERE mobile = ?').get(data.mobile)
   if (existing) throw new Error('Customer with this mobile already exists')
 
   const result = db.prepare(`
-    INSERT INTO customers (name, mobile, address, max_credit_limit_paise)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO customers (name, mobile, address, notes, max_credit_limit_paise)
+    VALUES (?, ?, ?, ?, ?)
   `).run(
     data.name,
     data.mobile,
     data.address || null,
+    data.notes?.trim() || null,
     data.max_credit_limit_paise ?? 500000 // default 5000 INR
   )
   return getCustomer(result.lastInsertRowid as number)!
+}
+
+export function updateCustomer(id: number, data: {
+  name?: string
+  mobile?: string
+  address?: string | null
+  notes?: string | null
+  max_credit_limit_paise?: number
+}): Customer {
+  const db = getDatabase()
+  const current = getCustomer(id)
+  if (!current) throw new Error(`Customer with ID ${id} not found`)
+
+  if (data.mobile && data.mobile !== current.mobile) {
+    const existing = db.prepare('SELECT id FROM customers WHERE mobile = ? AND id != ?').get(data.mobile, id)
+    if (existing) throw new Error('Another customer with this mobile already exists')
+  }
+
+  const name = data.name !== undefined ? data.name : current.name
+  const mobile = data.mobile !== undefined ? data.mobile : current.mobile
+  const address = data.address !== undefined ? (data.address || null) : current.address
+  const notes = data.notes !== undefined ? (data.notes ? data.notes.trim() : null) : current.notes
+  const maxCreditLimit = data.max_credit_limit_paise !== undefined ? data.max_credit_limit_paise : current.max_credit_limit_paise
+
+  db.prepare(`
+    UPDATE customers 
+    SET name = ?, mobile = ?, address = ?, notes = ?, max_credit_limit_paise = ?
+    WHERE id = ?
+  `).run(name, mobile, address, notes, maxCreditLimit, id)
+
+  return getCustomer(id)!
 }
 
 export function getCustomer(id: number): Customer | undefined {
@@ -44,12 +77,13 @@ export function getCustomer(id: number): Customer | undefined {
 
 export function searchCustomers(query: string): Customer[] {
   const db = getDatabase()
+  const searchTerm = `%${query}%`
   return db.prepare(`
     SELECT * FROM customers 
-    WHERE name LIKE ? OR mobile LIKE ?
+    WHERE name LIKE ? OR mobile LIKE ? OR notes LIKE ?
     ORDER BY name ASC
     LIMIT 20
-  `).all(`%${query}%`, `%${query}%`) as Customer[]
+  `).all(searchTerm, searchTerm, searchTerm) as Customer[]
 }
 
 export function listCustomers(): Customer[] {
@@ -97,6 +131,7 @@ export function acceptPayment(customerId: number, amountPaise: number, reference
 
 export function registerCustomerHandlers() {
   ipcMain.handle(IPC_CHANNELS.CUSTOMERS_CREATE, (_, data) => createCustomer(data))
+  ipcMain.handle(IPC_CHANNELS.CUSTOMERS_UPDATE, (_, { id, data }) => updateCustomer(id, data))
   ipcMain.handle(IPC_CHANNELS.CUSTOMERS_SEARCH, (_, query) => searchCustomers(query))
   ipcMain.handle(IPC_CHANNELS.CUSTOMERS_GET, (_, id) => getCustomer(id))
   ipcMain.handle(IPC_CHANNELS.CUSTOMERS_LEDGER, (_, id) => getCustomerLedger(id))

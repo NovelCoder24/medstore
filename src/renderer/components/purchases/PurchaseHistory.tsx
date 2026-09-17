@@ -7,6 +7,8 @@ import {
   CheckCircle2, X, Loader2, ArrowUpDown, ChevronRight, Eye, 
   Receipt, ShieldCheck, Tag, ShoppingBag
 } from 'lucide-react'
+import { DateRangeFilter, DateFilterPreset } from '../common/DateRangeFilter'
+import { PaginationControls } from '../common/PaginationControls'
 
 function formatTimestamp(rawTimestamp: string | null | undefined): string {
   if (!rawTimestamp) return 'N/A'
@@ -154,41 +156,30 @@ export function PurchaseHistory() {
 
   const [search, setSearch] = useState('')
   const [selectedVendor, setSelectedVendor] = useState<number | undefined>(undefined)
-  const [dateRange, setDateRange] = useState<'ALL' | 'THIS_MONTH' | 'LAST_MONTH' | 'LAST_3_MONTHS'>('ALL')
+  const [datePreset, setDatePreset] = useState<DateFilterPreset>('ALL')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 15
   const [viewingInvoiceId, setViewingInvoiceId] = useState<number | null>(null)
 
-  // Compute date filter strings
-  const getFilterDates = () => {
-    if (dateRange === 'ALL') return {}
-    const now = new Date()
-    let startDate = ''
-    let endDate = ''
-
-    if (dateRange === 'THIS_MONTH') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
-    } else if (dateRange === 'LAST_MONTH') {
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
-      endDate = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
-    } else if (dateRange === 'LAST_3_MONTHS') {
-      startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0]
-      endDate = now.toISOString().split('T')[0]
-    }
-
-    return { startDate, endDate }
+  const handleDateChange = (preset: DateFilterPreset, start: string, end: string) => {
+    setDatePreset(preset)
+    setStartDate(start)
+    setEndDate(end)
+    setCurrentPage(1)
   }
-
-  const { startDate, endDate } = getFilterDates()
 
   const { data: invoices, isLoading, error } = usePurchaseInvoices({
     vendorId: selectedVendor,
-    startDate,
-    endDate,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
     search: search.trim() || undefined
   })
 
   // Calculate Metrics
   const totalCount = invoices?.length || 0
+  const paginatedInvoices = invoices?.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const totalAmountPaise = (invoices || []).reduce((sum, inv) => sum + inv.total_amount_paise, 0)
 
   return (
@@ -217,36 +208,38 @@ export function PurchaseHistory() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 border border-border rounded-2xl shadow-xs">
         {/* Search */}
-        <div className="relative md:col-span-1">
+        <div className="relative flex-1 max-w-sm">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
             placeholder="Search invoice # or supplier..."
-            className="w-full pl-9 pr-4 py-2 text-xs font-medium border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-primary outline-none shadow-sm"
+            className="w-full pl-9 pr-4 py-2 text-xs font-medium border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-primary outline-none shadow-xs"
           />
         </div>
 
         {/* Date Range Selector */}
-        <select
-          value={dateRange}
-          onChange={(e) => setDateRange(e.target.value as any)}
-          className="px-3 py-2 text-xs font-semibold border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-primary outline-none shadow-sm cursor-pointer"
-        >
-          <option value="ALL">📅 All Time History</option>
-          <option value="THIS_MONTH">📅 This Month</option>
-          <option value="LAST_MONTH">📅 Last Month</option>
-          <option value="LAST_3_MONTHS">📅 Last 3 Months</option>
-        </select>
+        <DateRangeFilter
+          preset={datePreset}
+          startDate={startDate}
+          endDate={endDate}
+          onChange={handleDateChange}
+        />
 
         {/* Supplier Selector */}
         <select
           value={selectedVendor || ''}
-          onChange={(e) => setSelectedVendor(e.target.value ? Number(e.target.value) : undefined)}
-          className="px-3 py-2 text-xs font-semibold border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-primary outline-none shadow-sm cursor-pointer"
+          onChange={(e) => {
+            setSelectedVendor(e.target.value ? Number(e.target.value) : undefined)
+            setCurrentPage(1)
+          }}
+          className="px-3 py-2 text-xs font-semibold border border-input rounded-xl bg-background text-foreground focus:ring-2 focus:ring-primary outline-none shadow-xs cursor-pointer"
         >
           <option value="">🏢 All Suppliers / Vendors</option>
           {vendors?.map((v) => (
@@ -264,12 +257,12 @@ export function PurchaseHistory() {
         <div className="p-4 text-xs font-medium text-red-500 bg-red-500/10 rounded-xl border border-red-500/20">
           Failed to load purchase invoice records.
         </div>
-      ) : invoices?.length === 0 ? (
+      ) : totalCount === 0 ? (
         <div className="p-12 text-center text-muted-foreground border border-dashed border-border rounded-2xl bg-background">
           No purchase invoices found matching your filters.
         </div>
       ) : (
-        <div className="border border-border rounded-2xl overflow-hidden shadow-sm">
+        <div className="border border-border rounded-2xl overflow-hidden shadow-sm bg-white">
           <table className="w-full text-xs text-left">
             <thead className="bg-muted/60 border-b border-border font-bold text-foreground">
               <tr>
@@ -282,7 +275,7 @@ export function PurchaseHistory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border bg-background">
-              {invoices?.map((inv) => (
+              {paginatedInvoices?.map((inv) => (
                 <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 font-semibold text-foreground">
                     {inv.invoice_date}
@@ -303,7 +296,7 @@ export function PurchaseHistory() {
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => setViewingInvoiceId(inv.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-xl transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-xl transition-colors cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       View Invoice
@@ -313,6 +306,14 @@ export function PurchaseHistory() {
               ))}
             </tbody>
           </table>
+
+          {/* Bottom Pagination Bar */}
+          <PaginationControls
+            currentPage={currentPage}
+            totalItems={totalCount}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 

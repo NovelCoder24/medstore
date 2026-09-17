@@ -31,7 +31,8 @@ const { dbPath, startDate, endDate } = workerData as WorkerData
 let db: Database.Database | null = null
 
 try {
-  db = new Database(dbPath, { readonly: true })
+  db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  db.pragma('busy_timeout = 5000')
 
   // Adjust end date to include the entire day
   const adjustedEnd = endDate.includes(' ') || endDate.includes('T') ? endDate : `${endDate} 23:59:59`

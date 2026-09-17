@@ -350,19 +350,27 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                     <label className="text-sm font-medium">Link to Khata Account <span className="text-red-500">*</span></label>
                     
                     {selectedCustomer ? (
-                      <div className="flex items-center justify-between bg-white p-2 border rounded-md">
-                        <div>
-                          <p className="font-semibold text-sm">{selectedCustomer.name}</p>
-                          <p className="text-xs text-muted-foreground">{selectedCustomer.mobile}</p>
+                      <div className="bg-white p-2.5 border rounded-md space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-sm">{selectedCustomer.name}</p>
+                            <p className="text-xs text-muted-foreground">{selectedCustomer.mobile}</p>
+                          </div>
+                          <button type="button" onClick={() => setSelectedCustomer(null)} className="text-xs text-red-500 hover:underline">Change</button>
                         </div>
-                        <button type="button" onClick={() => setSelectedCustomer(null)} className="text-xs text-red-500 hover:underline">Change</button>
+                        {selectedCustomer.notes && (
+                          <div className="text-xs bg-amber-50 text-amber-900 border border-amber-200/80 rounded-md p-2 flex items-start gap-1.5">
+                            <span className="font-semibold shrink-0">Rx Notes:</span>
+                            <span className="break-words leading-tight">{selectedCustomer.notes}</span>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <input
                           type="text"
-                          placeholder="Search customer by name or mobile..."
+                          placeholder="Search customer by name, mobile, or medicine..."
                           value={customerSearch}
                           onChange={e => setCustomerSearch(e.target.value)}
                           className="w-full pl-9 pr-3 py-2 border rounded-md outline-none focus:ring-2 focus:ring-primary text-sm"
@@ -380,12 +388,19 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                                     setSelectedCustomer(c)
                                     if (!patient.name) updatePatient({ name: c.name, phone: c.mobile })
                                   }}
-                                  className="w-full text-left px-3 py-2 hover:bg-muted text-sm border-b last:border-0 flex justify-between"
+                                  className="w-full text-left px-3 py-2 hover:bg-muted text-sm border-b last:border-0"
                                 >
-                                  <span>{c.name} ({c.mobile})</span>
-                                  <span className={c.current_balance_paise > 0 ? 'text-red-500' : 'text-green-600'}>
-                                    Bal: {formatPaise(c.current_balance_paise)}
-                                  </span>
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-medium">{c.name} ({c.mobile})</span>
+                                    <span className={c.current_balance_paise > 0 ? 'text-red-500 font-semibold text-xs' : 'text-green-600 font-semibold text-xs'}>
+                                      Bal: {formatPaise(c.current_balance_paise)}
+                                    </span>
+                                  </div>
+                                  {c.notes && (
+                                    <p className="text-[11px] text-amber-700 mt-0.5 truncate flex items-center gap-1">
+                                      <span className="font-semibold">Rx Notes:</span> {c.notes}
+                                    </p>
+                                  )}
                                 </button>
                               ))
                             ) : (

@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "MedStore - Offline-First Desktop Architecture & POS Runtime Flow",
+    "output": "medstore-architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "primary-pos-path",
+        "label": "Primary POS Transaction Path",
+        "focus": ["pharmacist", "renderer-ui", "ipc-bridge", "core-services", "sqlite-db", "print-service", "receipt-printer"],
+        "note": "Follows the high-throughput sales flow from barcode scan to atomic ledger commit and receipt output."
+      },
+      {
+        "id": "ocr-inward-flow",
+        "label": "OCR Inward Ingestion Path",
+        "focus": ["renderer-ui", "ipc-bridge", "ocr-service", "gemini-api"],
+        "note": "Multi-modal distributor invoice processing via Gemini Vision and background extraction queue."
+      },
+      {
+        "id": "background-workers",
+        "label": "Worker Thread Offloading",
+        "focus": ["ipc-bridge", "worker-pool"],
+        "note": "Offloads reporting, scheduled backups, and batch registers away from the main process event loop."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "pharmacist",
+      "type": "external",
+      "label": "Pharmacist",
+      "sublabel": "Barcode & POS Input",
+      "pos": [40, 190],
+      "size": [120, 56]
+    },
+    {
+      "id": "renderer-ui",
+      "type": "frontend",
+      "label": "React Desktop UI",
+      "sublabel": "Vite + Zustand Store",
+      "pos": [230, 190],
+      "size": [130, 56],
+      "tag": "React 19"
+    },
+    {
+      "id": "ipc-bridge",
+      "type": "security",
+      "label": "Preload IPC Bridge",
+      "sublabel": "ContextIsolated Channel",
+      "pos": [430, 190],
+      "size": [130, 56],
+      "tag": "Secure API"
+    },
+    {
+      "id": "core-services",
+      "type": "backend",
+      "label": "Sales & Purchases",
+      "sublabel": "Batch Ledger Logic",
+      "pos": [640, 190],
+      "size": [130, 56]
+    },
+    {
+      "id": "sqlite-db",
+      "type": "database",
+      "label": "SQLite Database",
+      "sublabel": "better-sqlite3 WAL Mode",
+      "pos": [850, 190],
+      "size": [130, 56],
+      "tag": "Offline-First"
+    },
+    {
+      "id": "ocr-service",
+      "type": "backend",
+      "label": "OCR Queue Service",
+      "sublabel": "Invoice Parser Queue",
+      "pos": [640, 70],
+      "size": [130, 56]
+    },
+    {
+      "id": "gemini-api",
+      "type": "cloud",
+      "label": "Google Gemini API",
+      "sublabel": "Multimodal Vision",
+      "pos": [850, 70],
+      "size": [130, 56],
+      "tag": "Cloud AI"
+    },
+    {
+      "id": "print-service",
+      "type": "backend",
+      "label": "Print Engine",
+      "sublabel": "Handlebars & Spooler",
+      "pos": [640, 310],
+      "size": [130, 56]
+    },
+    {
+      "id": "receipt-printer",
+      "type": "external",
+      "label": "Receipt Printer",
+      "sublabel": "Thermal ESC/POS / PDF",
+      "pos": [850, 310],
+      "size": [130, 56]
+    },
+    {
+      "id": "worker-pool",
+      "type": "backend",
+      "label": "Worker Threads",
+      "sublabel": "Reports & Auto-Backup",
+      "pos": [430, 310],
+      "size": [130, 56],
+      "tag": "Async Pool"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Electron Desktop Host Runtime",
+      "wraps": ["renderer-ui", "ipc-bridge", "core-services", "sqlite-db", "ocr-service", "print-service", "worker-pool"]
+    },
+    {
+      "kind": "security-group",
+      "label": "Main Node Process Layer",
+      "wraps": ["core-services", "sqlite-db", "ocr-service", "print-service", "worker-pool"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "pharmacist-to-ui",
+      "from": "pharmacist",
+      "to": "renderer-ui",
+      "label": "POS Input",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ui-to-ipc",
+      "from": "renderer-ui",
+      "to": "ipc-bridge",
+      "label": "invoke(IPC)",
+      "variant": "security"
+    },
+    {
+      "id": "ipc-to-core",
+      "from": "ipc-bridge",
+      "to": "core-services",
+      "label": "Checkout",
+      "variant": "emphasis"
+    },
+    {
+      "id": "core-to-db",
+      "from": "core-services",
+      "to": "sqlite-db",
+      "label": "WAL Tx",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ipc-to-ocr",
+      "from": "ipc-bridge",
+      "to": "ocr-service",
+      "label": "Queue File",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "ocr-to-gemini",
+      "from": "ocr-service",
+      "to": "gemini-api",
+      "label": "Vision API",
+      "variant": "dashed"
+    },
+    {
+      "id": "core-to-print",
+      "from": "core-services",
+      "to": "print-service",
+      "label": "Receipt",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "print-to-printer",
+      "from": "print-service",
+      "to": "receipt-printer",
+      "label": "Print Job"
+    },
+    {
+      "id": "ipc-to-workers",
+      "from": "ipc-bridge",
+      "to": "worker-pool",
+      "label": "Async Jobs",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Client & IPC Layer",
+      "items": [
+        "React 19 desktop UI with Zustand state stores",
+        "Preload bridge isolates Node.js with contextBridge"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Main Process & Core Engine",
+      "items": [
+        "Atomic SQLite transactions with WAL mode",
+        "Print service compiles Handlebars templates for receipts"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Asynchronous & AI Extensions",
+      "items": [
+        "Google Gemini multimodal vision parses invoices",
+        "Node.js worker threads isolate backups and reports"
+      ]
+    }
+  ]
+}

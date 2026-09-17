@@ -2,11 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import type { SalePayload } from '../../main/services/sales.service' // just for types
 
-export function useSalesHistory(dateRange?: { start: string, end: string }) {
-  // Can just fetch recent sales for now
+export interface SalesHistoryFilters {
+  startDate?: string
+  endDate?: string
+  start?: string
+  end?: string
+  search?: string
+}
+
+export function useSalesHistory(filters?: SalesHistoryFilters) {
   return useQuery({
-    queryKey: ['sales', 'history', dateRange],
-    queryFn: async () => window.api.invoke(IPC_CHANNELS.SALES_LIST, dateRange) as Promise<any[]>
+    queryKey: ['sales', 'history', filters],
+    queryFn: async () => window.api.invoke(IPC_CHANNELS.SALES_LIST, filters) as Promise<any[]>
   })
 }
 

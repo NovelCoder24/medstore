@@ -89,12 +89,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tax Invoice — {{store.storeName}}</title>
-  <!-- Google Fonts: Crisp Serif for Header, Clean Grotesk for Body, Clear Mono for Numbers & Codes -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800;900&family=Source+Serif+4:wght@600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-
+ 
   <style>
     :root {
       --primary-ink: #0f172a;       /* Deep Slate/Black - high contrast */
@@ -106,23 +101,28 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
       --accent-tag: #e6fffa;
       --paper-bg: #ffffff;
       --app-bg: #f1f5f9;
+ 
+      /* System font stacks (replacing Google Fonts) */
+      --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-heading: Georgia, "Times New Roman", Times, serif;
+      --font-mono: "Consolas", "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, Monaco, monospace;
     }
-
+ 
     * {
       box-sizing: border-box;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
-
+ 
     body {
       margin: 0;
       background: var(--app-bg);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-body);
       color: var(--primary-ink);
       -webkit-font-smoothing: antialiased;
       padding: 16px 8px;
     }
-
+ 
     /* A4 Sheet Proportion & Print Layout */
     .memo-sheet {
       width: 100%;
@@ -134,21 +134,162 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
       overflow: hidden;
     }
-
+ 
     .font-heading {
-      font-family: 'Source Serif 4', 'Playfair Display', Georgia, serif;
+      font-family: var(--font-heading);
     }
-
+ 
     .font-mono-code {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-mono);
     }
-
+ 
+    /* ===== Layout utility classes (vanilla replacements for Tailwind) ===== */
+ 
+    .pt-6 { padding-top: 24px; }
+    .pt-3 { padding-top: 12px; }
+    .px-6 { padding-left: 24px; padding-right: 24px; }
+    .pb-4 { padding-bottom: 16px; }
+    .p-4 { padding: 16px; }
+    .p-5 { padding: 20px; }
+    .p-3 { padding: 12px; }
+    .pr-0 { padding-right: 0; }
+    .pr-2 { padding-right: 8px; }
+    .pr-4 { padding-right: 16px; }
+    .pl-0 { padding-left: 0; }
+    .pl-2 { padding-left: 8px; }
+    .py-1 { padding-top: 4px; padding-bottom: 4px; }
+    .py-0\\.5 { padding-top: 2px; padding-bottom: 2px; }
+    .py-1\\.5 { padding-top: 6px; padding-bottom: 6px; }
+    .py-2\\.5 { padding-top: 10px; padding-bottom: 10px; }
+    .px-1\\.5 { padding-left: 6px; padding-right: 6px; }
+    .px-2 { padding-left: 8px; padding-right: 8px; }
+    .px-4 { padding-left: 16px; padding-right: 16px; }
+    .mt-1 { margin-top: 4px; }
+    .mt-2 { margin-top: 8px; }
+    .mt-3 { margin-top: 12px; }
+    .mb-1 { margin-bottom: 4px; }
+    .mb-3\\.5 { margin-bottom: 14px; }
+    .m-0 { margin: 0; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .max-w-xl { max-width: 36rem; }
+    .min-w-\\[75px\\] { min-width: 75px; }
+    .min-w-\\[70px\\] { min-width: 70px; }
+    .min-w-\\[200px\\] { min-width: 200px; }
+ 
+    .text-center { text-align: center; }
+    .text-left { text-align: left; }
+    .text-right { text-align: right; }
+    .uppercase { text-transform: uppercase; }
+    .tracking-wide { letter-spacing: 0.4px; }
+    .tracking-wider { letter-spacing: 0.6px; }
+    .tracking-\\[1\\.5px\\] { letter-spacing: 1.5px; }
+    .tracking-tight { letter-spacing: -0.2px; }
+    .leading-tight { line-height: 1.2; }
+    .leading-snug { line-height: 1.35; }
+    .leading-relaxed { line-height: 1.6; }
+ 
+    .font-medium { font-weight: 500; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .font-black { font-weight: 900; }
+ 
+    .text-xs { font-size: 12px; }
+    .text-xl { font-size: 20px; }
+    .text-2xl { font-size: 24px; }
+    .text-\\[10px\\] { font-size: 10px; }
+    .text-\\[10\\.5px\\] { font-size: 10.5px; }
+    .text-\\[11px\\] { font-size: 11px; }
+    .text-\\[11\\.5px\\] { font-size: 11.5px; }
+    .text-\\[12px\\] { font-size: 12px; }
+    .text-\\[12\\.5px\\] { font-size: 12.5px; }
+    .text-\\[13px\\] { font-size: 13px; }
+    .text-\\[14px\\] { font-size: 14px; }
+ 
+    .text-white { color: #ffffff; }
+    .text-slate-900 { color: #0f172a; }
+    .text-slate-800 { color: #1e293b; }
+    .text-slate-700 { color: #334155; }
+    .text-slate-600 { color: #475569; }
+    .text-slate-500 { color: #64748b; }
+    .text-slate-400 { color: #94a3b8; }
+    .text-slate-300 { color: #cbd5e1; }
+    .text-amber-700 { color: #b45309; }
+ 
+    .bg-white { background: #ffffff; }
+    .bg-slate-50\\/50 { background: rgba(248, 250, 252, 0.5); }
+    .bg-slate-50\\/70 { background: rgba(248, 250, 252, 0.7); }
+    .bg-slate-100 { background: #f1f5f9; }
+    .bg-slate-100\\/90 { background: rgba(241, 245, 249, 0.9); }
+    .bg-slate-200 { background: #e2e8f0; }
+    .bg-slate-800 { background: #1e293b; }
+    .bg-slate-900 { background: #0f172a; }
+ 
+    .border { border-width: 1px; border-style: solid; }
+    .border-b { border-bottom-width: 1px; border-bottom-style: solid; }
+    .border-t { border-top-width: 1px; border-top-style: solid; }
+    .border-b-2 { border-bottom-width: 2px; border-bottom-style: solid; }
+    .border-r { border-right-width: 1px; border-right-style: solid; }
+    .border-dashed { border-style: dashed; }
+    .border-slate-800 { border-color: #1e293b; }
+    .border-slate-300 { border-color: #cbd5e1; }
+    .border-slate-200 { border-color: #e2e8f0; }
+    .border-slate-400 { border-color: #94a3b8; }
+    .rounded { border-radius: 4px; }
+    .rounded-md { border-radius: 6px; }
+    .shadow-sm { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); }
+ 
+    .block { display: block; }
+    .inline-block { display: inline-block; }
+    .flex { display: flex; }
+    .inline-flex { display: inline-flex; }
+    .grid { display: grid; }
+    .items-center { align-items: center; }
+    .items-baseline { align-items: baseline; }
+    .items-start { align-items: start; }
+    .items-end { align-items: end; }
+    .justify-between { justify-content: space-between; }
+    .justify-center { justify-content: center; }
+    .gap-1\\.5 { gap: 6px; }
+    .gap-2 { gap: 8px; }
+    .gap-4 { gap: 16px; }
+    .gap-6 { gap: 24px; }
+    .gap-x-4 { column-gap: 16px; }
+    .gap-y-1\\.5 { row-gap: 6px; }
+    .space-y-1 > * + * { margin-top: 4px; }
+    .space-y-1\\.5 > * + * { margin-top: 6px; }
+    .space-y-3 > * + * { margin-top: 12px; }
+ 
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+ 
+    .w-2 { width: 8px; }
+    .h-2 { height: 8px; }
+    .h-16 { height: 64px; }
+    .w-28 { width: 112px; }
+    .rounded-full { border-radius: 9999px; }
+ 
+    .overflow-x-auto { overflow-x: auto; }
+ 
+    /* sm: breakpoint (>=640px) equivalents used above */
+    @media (min-width: 640px) {
+      .sm\\:text-3xl { font-size: 30px; }
+      .sm\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sm\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .sm\\:border-r { border-right-width: 1px; border-right-style: solid; }
+      .sm\\:pr-4 { padding-right: 16px; }
+      .sm\\:pl-2 { padding-left: 8px; }
+      .sm\\:justify-start { justify-content: flex-start; }
+      .sm\\:text-right { text-align: right; }
+      .sm\\:p-5 { padding: 20px; }
+      .sm\\:text-2xl { font-size: 24px; }
+    }
+ 
     /* Table borders and cell alignments */
     table.invoice-table {
       width: 100%;
       border-collapse: collapse;
     }
-
+ 
     table.invoice-table th {
       background: var(--primary-ink);
       color: #ffffff;
@@ -159,7 +300,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
       padding: 9px 10px;
       border: 1px solid var(--primary-ink);
     }
-
+ 
     table.invoice-table td {
       padding: 9px 10px;
       font-size: 12.5px;
@@ -168,23 +309,23 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
       border-right: 1px solid var(--border-light);
       vertical-align: middle;
     }
-
+ 
     @page {
       size: A4 portrait;
       margin: 8mm 10mm 8mm 10mm;
     }
-
+ 
     @media print {
       body {
         background: #ffffff !important;
         padding: 0 !important;
         color: #000000 !important;
       }
-
+ 
       .no-print {
         display: none !important;
       }
-
+ 
       .memo-sheet {
         max-width: 100% !important;
         width: 100% !important;
@@ -193,35 +334,35 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
         border-radius: 0 !important;
         box-shadow: none !important;
       }
-
+ 
       table.invoice-table th {
         background: #1a1a1a !important;
         color: #ffffff !important;
         border: 1px solid #000000 !important;
       }
-
+ 
       table.invoice-table td {
         border: 1px solid #666666 !important;
         color: #000000 !important;
       }
-
+ 
       .memo-badge-strip {
         background: #f4f4f4 !important;
         border-top: 1px solid #000 !important;
         border-bottom: 1px solid #000 !important;
         color: #000 !important;
       }
-
+ 
       .grand-total-card {
         background: #000000 !important;
         color: #ffffff !important;
         border: 1px solid #000000 !important;
       }
-
+ 
       .border-ink {
         border-color: #000000 !important;
       }
-
+ 
       .text-slate-600, .text-slate-500, .text-teal-800 {
         color: #1a1a1a !important;
       }
@@ -229,23 +370,23 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
   </style>
 </head>
 <body>
-
+ 
   <main class="memo-sheet">
-
+ 
     <!-- TOP HEADER / LETTERHEAD -->
     <header class="pt-6 px-6 pb-4 text-center border-b-2 border-slate-800">
       <!-- MAIN STORE NAME (CENTERED & CAPITAL LETTERS) -->
       <h1 class="font-heading text-2xl sm:text-3xl font-black uppercase tracking-[1.5px] text-slate-900 m-0 leading-tight">
         {{store.storeName}}
       </h1>
-
+ 
       <!-- Formal Address -->
       {{#if store.storeAddress}}
       <p class="text-[12.5px] text-slate-600 font-medium mt-1 mb-3.5 max-w-xl mx-auto leading-relaxed">
         {{store.storeAddress}}
       </p>
       {{/if}}
-
+ 
       <!-- FORMAL BUSINESS CREDENTIALS GRID -->
       <div class="mt-3 pt-3 border-t border-dashed border-slate-300 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[11.5px] text-left bg-slate-50/70 p-3 rounded border border-slate-200">
         
@@ -256,7 +397,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold text-slate-900">{{store.storeProprietor}}</span>
         </div>
         {{/if}}
-
+ 
         <!-- Phone -->
         {{#if store.storePhone}}
         <div class="flex items-baseline gap-1.5">
@@ -264,7 +405,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold font-mono-code text-slate-900">{{store.storePhone}}</span>
         </div>
         {{/if}}
-
+ 
         <!-- Drug Lic. (Appears only if assigned) -->
         {{#if store.storeDl}}
         <div class="flex items-baseline gap-1.5">
@@ -272,7 +413,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold font-mono-code text-slate-900">{{store.storeDl}}</span>
         </div>
         {{/if}}
-
+ 
         <!-- GSTIN (Appears only if assigned) -->
         {{#if store.storeGstin}}
         <div class="flex items-baseline gap-1.5">
@@ -280,7 +421,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold font-mono-code text-slate-900">{{store.storeGstin}}</span>
         </div>
         {{/if}}
-
+ 
         <!-- Bank A/C -->
         {{#if store.storeAccountNo}}
         <div class="flex items-baseline gap-1.5">
@@ -288,7 +429,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold font-mono-code text-slate-900">{{store.storeAccountNo}}</span>
         </div>
         {{/if}}
-
+ 
         <!-- IFSC Code -->
         {{#if store.storeIfsc}}
         <div class="flex items-baseline gap-1.5">
@@ -296,10 +437,10 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           <span class="font-bold font-mono-code text-slate-900">{{store.storeIfsc}}</span>
         </div>
         {{/if}}
-
+ 
       </div>
     </header>
-
+ 
     <!-- PROFESSIONAL TAX INVOICE STRIP -->
     <div class="memo-badge-strip bg-slate-100/90 border-b border-slate-300 py-1.5 px-6 flex items-center justify-between text-xs">
       <div class="flex items-center gap-2">
@@ -310,7 +451,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
         Original for Recipient
       </div>
     </div>
-
+ 
     <section class="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[12.5px] border-b border-slate-300 bg-white">
       
       <!-- Patient / Customer Details -->
@@ -339,7 +480,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
         </div>
         {{/if}}
       </div>
-
+ 
       <!-- Invoice & Date Details -->
       <div class="space-y-1.5 pl-0 sm:pl-2">
         <div class="flex items-baseline justify-between sm:justify-start">
@@ -359,9 +500,9 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
           </span>
         </div>
       </div>
-
+ 
     </section>
-
+ 
     <div class="overflow-x-auto">
       <table class="invoice-table">
         <thead>
@@ -397,7 +538,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
         </tbody>
       </table>
     </div>
-
+ 
     <div class="p-4 sm:p-5 bg-slate-50/50 border-t border-slate-300">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
         
@@ -412,26 +553,26 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
             </span>
           </div>
         </div>
-
+ 
         <!-- Right Column: Calculation Summary -->
         <div class="space-y-1.5 text-[12.5px]">
           <div class="flex justify-between py-1 border-b border-slate-200">
             <span class="text-slate-600 font-medium">Gross Subtotal:</span>
             <span class="font-mono-code font-semibold text-slate-900">₹{{formatPaise sale.subtotalPaise}}</span>
           </div>
-
+ 
           {{#if sale.totalDiscountPaise}}
           <div class="flex justify-between py-1 border-b border-slate-200 text-amber-700">
             <span class="font-medium">Special Discount (₹):</span>
             <span class="font-mono-code font-bold">- ₹{{formatPaise sale.totalDiscountPaise}}</span>
           </div>
           {{/if}}
-
+ 
           <div class="flex justify-between py-1 border-b border-slate-200">
             <span class="text-slate-600 font-medium">GST / Taxes Included:</span>
             <span class="font-mono-code text-slate-700">₹{{formatPaise sale.totalTaxPaise}} (MRP incl.)</span>
           </div>
-
+ 
           <!-- GRAND NET TOTAL -->
           <div class="grand-total-card flex justify-between items-center bg-slate-900 text-white px-4 py-2.5 rounded-md mt-2 shadow-sm">
             <div>
@@ -443,10 +584,10 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
             </span>
           </div>
         </div>
-
+ 
       </div>
     </div>
-
+ 
     <footer class="p-5 border-t border-slate-300 bg-white">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-end">
         
@@ -457,7 +598,7 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
             &bull; Refrigerated &amp; Cut strip medicines are not eligible for return.
           </p>
         </div>
-
+ 
         <!-- Signature and Seal -->
         <div class="text-center sm:text-right">
           <div class="inline-block text-center min-w-[200px]">
@@ -470,10 +611,10 @@ const DEFAULT_A4_INVOICE_TEMPLATE = `
             <div class="text-[10.5px] text-slate-500">Authorized Signatory</div>
           </div>
         </div>
-
+ 
       </div>
     </footer>
-
+ 
   </main>
 </body>
 </html>

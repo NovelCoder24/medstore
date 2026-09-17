@@ -14,8 +14,9 @@ export type Paise = number & { readonly __brand: 'paise' }
  *
  * @example toPaise(152.50) → 15250 as Paise
  */
-export function toPaise(rupees: number): Paise {
-  return Math.round(rupees * 100) as Paise
+export function toPaise(rupees: number | string | null | undefined): Paise {
+  const n = typeof rupees === 'string' ? parseFloat(rupees) : Number(rupees)
+  return Math.round((isNaN(n) ? 0 : n) * 100) as Paise
 }
 
 /**

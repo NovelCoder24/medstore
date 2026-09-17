@@ -1,6 +1,7 @@
 # Dependency directories
 node_modules/
 
+.agents/
 # Build output
 out/
 dist/

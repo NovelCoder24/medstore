@@ -28,7 +28,10 @@ export interface OcrExtractedItem {
   gstRatePct: number
   hsnCode: string | null
   confidence: number  // 0.0–1.0
+  imageClarityReason?: string | null // e.g. "Blurry batch number", "Faint expiry date"
   isFlagged: boolean
+  flagReasons?: string[]
+  suggestedMatches?: Array<{ id: number; brandName: string; packSize: number }>
 }
 
 export interface OcrExtractionResult {
@@ -47,6 +50,74 @@ export interface OcrExtractionResult {
   items: OcrExtractedItem[]
   /** The raw Gemini JSON (pre-validation) for diff-based learning on approval */
   rawExtraction: Record<string, unknown>
+  _meta?: {
+    dailyRequestCount: number
+    dailyLimit: number
+    isApproachingLimit: boolean
+  }
+}
+
+export interface DailyOcrUsage {
+  count: number
+  limit: number
+  warnThreshold: number
+  isApproachingLimit: boolean
+  isAtLimit: boolean
+}
+
+// ── OCR Batch Queue Types ──
+export type OcrQueueStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'APPROVED' | 'DISCARDED'
+
+/** Lightweight queue summary item for high-performance IPC listing without large payload serialization */
+export interface OcrQueueSummaryItem {
+  id: number
+  imageHash: string
+  fileName: string
+  filePath: string
+  mimeType: string
+  fileSizeBytes: number
+  status: OcrQueueStatus
+  errorMessage: string | null
+  vendorNamePreview: string | null
+  invoiceNumberPreview: string | null
+  invoiceDatePreview: string | null
+  totalAmountPreview: number | null
+  itemCount: number
+  flaggedCount: number
+  retryCount: number
+  processingDurationMs: number | null
+  createdAt: string
+  processedAt: string | null
+  completedAt: string | null
+}
+
+/** Full queue item with deserialized extracted data — fetched on-demand per invoice */
+export interface OcrQueueItem extends OcrQueueSummaryItem {
+  extractedData: OcrExtractionResult | null
+}
+
+export interface OcrQueueProgressEvent {
+  status: 'IDLE' | 'PROCESSING'
+  currentItemId?: number
+  currentFileName?: string
+  currentIndex: number
+  totalCount: number
+  pendingCount: number
+  estimatedSecondsRemaining: number
+}
+
+export interface OcrQueueUpdateEvent {
+  type: 'ENQUEUED' | 'STATUS_CHANGED' | 'DELETED' | 'CLEARED'
+  itemId?: number
+  status?: OcrQueueStatus
+  summary: {
+    total: number
+    pending: number
+    processing: number
+    ready: number
+    failed: number
+    approved: number
+  }
 }
 
 // ── Vendor OCR Profile Types ──
@@ -63,3 +134,4 @@ export interface VendorOcrProfile {
   layoutNotes: string
   correctionHistory: VendorOcrCorrection[]
 }
+

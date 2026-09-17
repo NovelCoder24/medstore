@@ -36,10 +36,22 @@ export function useCustomerLedger(id: number) {
 export function useCreateCustomer() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (data: { name: string, mobile: string, address?: string, max_credit_limit_paise?: number }) => 
+    mutationFn: async (data: { name: string, mobile: string, address?: string, notes?: string, max_credit_limit_paise?: number }) => 
       window.api.invoke(IPC_CHANNELS.CUSTOMERS_CREATE, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
+    }
+  })
+}
+
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number, data: { name?: string, mobile?: string, address?: string | null, notes?: string | null, max_credit_limit_paise?: number } }) => 
+      window.api.invoke(IPC_CHANNELS.CUSTOMERS_UPDATE, { id, data }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: ['customers', variables.id] })
     }
   })
 }
