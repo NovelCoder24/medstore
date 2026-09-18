@@ -115,6 +115,7 @@ export function PurchaseProductSearch({ onProductAdded }: PurchaseProductSearchP
       <div className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl shadow-xs focus-within:ring-1 focus-within:ring-slate-400 focus-within:border-slate-400 transition">
         <Search className="w-4 h-4 text-slate-400 shrink-0" />
         <input
+          id="purchase-product-search-input"
           ref={inputRef}
           type="text"
           className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400 text-slate-900"

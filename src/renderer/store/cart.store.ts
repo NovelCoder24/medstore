@@ -36,9 +36,20 @@ export interface PatientDetails {
   doctorRegNo: string
 }
 
+export interface ParkedCart {
+  id: string
+  label: string
+  items: CartLineItem[]
+  patient: PatientDetails
+  parkedAt: string
+  itemCount: number
+  grandTotalPaise: number
+}
+
 interface CartState {
   items: CartLineItem[]
   patient: PatientDetails
+  parkedCarts: ParkedCart[]
   
   // Actions
   addItem: (item: Omit<CartLineItem, 'id' | 'gstBreakdown'>) => void
@@ -50,6 +61,11 @@ interface CartState {
   removeItem: (id: string) => void
   updatePatient: (patient: Partial<PatientDetails>) => void
   clearCart: () => void
+  
+  // Park / Resume Cart Actions
+  parkCurrentCart: (customLabel?: string) => boolean
+  resumeCart: (parkedId: string) => void
+  discardParkedCart: (parkedId: string) => void
   
   // Computed State
   getTotals: () => {
@@ -65,6 +81,7 @@ const emptyPatient: PatientDetails = { name: '', phone: '', address: '', doctorN
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   patient: emptyPatient,
+  parkedCarts: [],
 
   addItem: (item) => {
     const gstBreakdown = calculateItemGst(
@@ -283,6 +300,75 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   clearCart: () => {
     set({ items: [], patient: emptyPatient })
+  },
+
+  parkCurrentCart: (customLabel) => {
+    const { items, patient, getTotals, parkedCarts } = get()
+    if (items.length === 0) return false
+
+    const totals = getTotals()
+    const label = customLabel?.trim() || 
+      (patient.name?.trim() 
+        ? `${patient.name} (${items.length} items)` 
+        : `Bill #${parkedCarts.length + 1} (${items.length} items)`)
+
+    const newParkedCart: ParkedCart = {
+      id: crypto.randomUUID(),
+      label,
+      items: [...items],
+      patient: { ...patient },
+      parkedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      itemCount: items.length,
+      grandTotalPaise: totals.grandTotalPaise
+    }
+
+    set({
+      items: [],
+      patient: emptyPatient,
+      parkedCarts: [newParkedCart, ...parkedCarts].slice(0, 5) // max 5 parked carts
+    })
+    return true
+  },
+
+  resumeCart: (parkedId) => {
+    const { items, patient, getTotals, parkedCarts } = get()
+    const target = parkedCarts.find(c => c.id === parkedId)
+    if (!target) return
+
+    const remainingParked = parkedCarts.filter(c => c.id !== parkedId)
+
+    // If current cart has items, park current cart as well
+    if (items.length > 0) {
+      const totals = getTotals()
+      const currentParked: ParkedCart = {
+        id: crypto.randomUUID(),
+        label: patient.name?.trim() 
+          ? `${patient.name} (${items.length} items)` 
+          : `Bill (${items.length} items)`,
+        items: [...items],
+        patient: { ...patient },
+        parkedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        itemCount: items.length,
+        grandTotalPaise: totals.grandTotalPaise
+      }
+      set({
+        items: target.items,
+        patient: target.patient,
+        parkedCarts: [currentParked, ...remainingParked].slice(0, 5)
+      })
+    } else {
+      set({
+        items: target.items,
+        patient: target.patient,
+        parkedCarts: remainingParked
+      })
+    }
+  },
+
+  discardParkedCart: (parkedId) => {
+    set((state) => ({
+      parkedCarts: state.parkedCarts.filter(c => c.id !== parkedId)
+    }))
   },
 
   getTotals: () => {

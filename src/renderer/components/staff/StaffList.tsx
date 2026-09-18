@@ -3,11 +3,30 @@ import { useStaff } from '../../hooks/useStaff'
 import { StaffFormModal } from './StaffFormModal'
 import { Users, UserPlus, ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { confirmModal } from '../../store/confirm.store'
+import { toast } from '../../store/toast.store'
 
 export function StaffList() {
   const { staff, isLoading, deactivateStaff, isDeactivating } = useStaff()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const queryClient = useQueryClient()
+
+  const handleDeactivate = async (user: any) => {
+    const confirmed = await confirmModal({
+      title: 'Deactivate Staff Member',
+      message: `Are you sure you want to deactivate ${user.display_name}? They will no longer be able to log in.`,
+      confirmText: 'Deactivate',
+      variant: 'danger'
+    })
+    if (confirmed) {
+      try {
+        await deactivateStaff(user.id)
+        toast.success(`Staff member "${user.display_name}" deactivated.`)
+      } catch (err: any) {
+        toast.error('Failed to deactivate staff', err.message)
+      }
+    }
+  }
 
   if (isLoading) {
     return (
@@ -70,13 +89,9 @@ export function StaffList() {
                   <td className="px-6 py-4 text-right">
                     {user.is_active && user.role !== 'OWNER' && (
                       <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to deactivate ${user.display_name}? They will no longer be able to log in.`)) {
-                            deactivateStaff(user.id)
-                          }
-                        }}
+                        onClick={() => handleDeactivate(user)}
                         disabled={isDeactivating}
-                        className="text-red-600 hover:text-red-700 font-medium text-sm disabled:opacity-50"
+                        className="text-red-600 hover:text-red-700 font-medium text-sm disabled:opacity-50 cursor-pointer"
                       >
                         Deactivate
                       </button>

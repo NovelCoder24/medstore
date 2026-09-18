@@ -15,6 +15,8 @@ import {
   ClipboardPaste
 } from 'lucide-react'
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
+import { toast } from '../../store/toast.store'
+import { confirmModal } from '../../store/confirm.store'
 import type {
   OcrQueueSummaryItem,
   OcrQueueItem,
@@ -154,17 +156,17 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
     try {
       const fullItem: OcrQueueItem = await window.api.invoke(IPC_CHANNELS.OCR_QUEUE_GET, summaryItem.id)
       if (!fullItem) {
-        alert(`Invoice #${summaryItem.id} could not be retrieved from the queue.`)
+        toast.error('Invoice not found', { description: `Invoice #${summaryItem.id} could not be retrieved from the queue.` })
         return
       }
       if (!fullItem.extractedData) {
-        alert(`Invoice #${summaryItem.id} does not have any extracted data.`)
+        toast.warning('Extraction incomplete', { description: `Invoice #${summaryItem.id} does not have any extracted data.` })
         return
       }
       await onOpenItemForReview(fullItem)
     } catch (err: any) {
       console.error(`Failed to get full details for queue item #${summaryItem.id}:`, err)
-      alert(`Could not open invoice for review: ${err?.message || 'Unknown error'}`)
+      toast.error('Failed to open invoice', { description: err?.message || 'Unknown error' })
     } finally {
       setOpeningItemId(null)
     }
@@ -173,19 +175,29 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
   const handleRetry = async (id: number) => {
     try {
       await window.api.invoke(IPC_CHANNELS.OCR_QUEUE_RETRY, id)
+      toast.info('Invoice queued for retry')
       await loadQueue()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to retry item:', err)
+      toast.error('Failed to retry item', { description: err?.message })
     }
   }
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Delete this invoice from queue?')) {
+    const confirmed = await confirmModal({
+      title: 'Delete Queue Item',
+      message: 'Are you sure you want to remove this invoice from the queue?',
+      confirmLabel: 'Delete',
+      variant: 'danger'
+    })
+    if (confirmed) {
       try {
         await window.api.invoke(IPC_CHANNELS.OCR_QUEUE_DELETE, id)
+        toast.success('Invoice removed from queue')
         await loadQueue()
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to delete item:', err)
+        toast.error('Failed to delete item', { description: err?.message })
       }
     }
   }
@@ -193,9 +205,11 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
   const handleClearCompleted = async () => {
     try {
       await window.api.invoke(IPC_CHANNELS.OCR_QUEUE_CLEAR_COMPLETED)
+      toast.success('Completed items cleared')
       await loadQueue()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to clear completed items:', err)
+      toast.error('Failed to clear completed items', { description: err?.message })
     }
   }
 

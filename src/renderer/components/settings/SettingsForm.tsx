@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { Settings, KeyRound, Loader2, Save, CheckCircle2, FileSpreadsheet, Download, Sparkles } from 'lucide-react'
 import { BackupSettings } from './BackupSettings'
 import { StoreHeaderSettingsCard } from './StoreHeaderSettingsCard'
+import { toast } from '../../store/toast.store'
 
 export function SettingsForm() {
   const [apiKey, setApiKey] = useState('')
@@ -188,8 +189,9 @@ export function SettingsForm() {
                     a.click()
                     document.body.removeChild(a)
                     URL.revokeObjectURL(url)
-                  } catch (err) {
-                    alert('Failed to generate GST report')
+                    toast.success('GSTR-1 report exported', `Downloaded GSTR1_${reportMonth}.csv`)
+                  } catch (err: any) {
+                    toast.error('Failed to generate GST report', err?.message)
                   } finally {
                     setIsExportingGst(false)
                   }

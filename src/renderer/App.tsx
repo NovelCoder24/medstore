@@ -17,6 +17,8 @@ import { Loader2 } from 'lucide-react'
 import { SettingsForm } from './components/settings/SettingsForm'
 import { StaffList } from './components/staff/StaffList'
 import { AuditLogs } from './components/settings/AuditLogs'
+import { ToastContainer } from './components/common/ToastContainer'
+import { ConfirmModal } from './components/common/ConfirmModal'
 
 export function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null)
@@ -53,19 +55,23 @@ export function App() {
   }
 
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'POS Billing' && <PosBilling />}
-      {activeTab === 'Inventory' && <ProductList />}
-      {activeTab === 'Purchases' && <PurchaseForm />}
-      {activeTab === 'Suppliers' && <VendorList />}
-      {activeTab === 'Customers' && <CustomerList />}
-      {activeTab === 'Sales History' && <SalesHistory />}
-      {activeTab === 'Drug Register' && <ScheduleRegister />}
-      {activeTab === 'Dashboard' && <Dashboard />}
-      {activeTab === 'Staff' && <StaffList />}
-      {activeTab === 'Audit Trail' && <AuditLogs />}
-      {activeTab === 'Settings' && <SettingsForm />}
-    </Layout>
+    <>
+      <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+        {activeTab === 'POS Billing' && <PosBilling />}
+        {activeTab === 'Inventory' && <ProductList />}
+        {activeTab === 'Purchases' && <PurchaseForm />}
+        {activeTab === 'Suppliers' && <VendorList />}
+        {activeTab === 'Customers' && <CustomerList />}
+        {activeTab === 'Sales History' && <SalesHistory />}
+        {activeTab === 'Drug Register' && <ScheduleRegister />}
+        {activeTab === 'Dashboard' && <Dashboard onNavigate={setActiveTab} />}
+        {activeTab === 'Staff' && <StaffList />}
+        {activeTab === 'Audit Trail' && <AuditLogs />}
+        {activeTab === 'Settings' && <SettingsForm />}
+      </Layout>
+      <ToastContainer />
+      <ConfirmModal />
+    </>
   )
 }
 

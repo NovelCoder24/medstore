@@ -6,6 +6,7 @@ import { Search, Loader2, RotateCcw, AlertTriangle, Printer } from 'lucide-react
 import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { DateRangeFilter, DateFilterPreset } from '../common/DateRangeFilter'
 import { PaginationControls } from '../common/PaginationControls'
+import { toast } from '../../store/toast.store'
 
 export function SalesHistory() {
   const [datePreset, setDatePreset] = useState<DateFilterPreset>('ALL')
@@ -24,7 +25,7 @@ export function SalesHistory() {
   const { user } = useAuthStore()
 
   const [returnModal, setReturnModal] = useState<any>(null)
-  const [returnItems, setReturnItems] = useState<Record<number, number>>({}) // saleItemId -> qty
+  const [returnItems, setReturnItems] = useState<{ [itemId: string]: number }>({})
   const [returnReason, setReturnReason] = useState('')
 
   const filteredSales = sales?.filter(s => 
@@ -52,8 +53,9 @@ export function SalesHistory() {
     try {
       const { sale, items } = await window.api.invoke(IPC_CHANNELS.SALES_GET, saleId)
       await window.api.invoke(IPC_CHANNELS.PRINT_RECEIPT, sale, items)
+      toast.success('Receipt sent to printer')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to reprint receipt')
+      toast.error('Failed to reprint receipt', err instanceof Error ? err.message : undefined)
     }
   }
 
@@ -75,8 +77,9 @@ export function SalesHistory() {
         items: itemsToReturn
       })
       setReturnModal(null)
+      toast.success('Sale return processed', 'Restocked to inventory and credit ledger updated.')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Return failed')
+      toast.error('Return failed', err instanceof Error ? err.message : undefined)
     }
   }
 

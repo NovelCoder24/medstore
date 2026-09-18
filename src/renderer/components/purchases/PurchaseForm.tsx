@@ -23,6 +23,9 @@ import { OcrReviewQueue } from './OcrReviewQueue'
 import { InvoiceDocumentViewer } from './InvoiceDocumentViewer'
 import { PurchaseProductSearch } from './PurchaseProductSearch'
 import { VendorCombobox } from './VendorCombobox'
+import { AlertBanner } from '../common/AlertBanner'
+import { toast } from '../../store/toast.store'
+import { confirmModal } from '../../store/confirm.store'
 
 function extractPackSize(packText: string | null | undefined): number {
   if (!packText) return 1
@@ -77,13 +80,6 @@ export function PurchaseForm() {
   const [error, setError] = useState<string | null>(null)
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 7000)
-      return () => clearTimeout(timer)
-    }
-  }, [error])
-
   // Track Ready count in Review Queue
   useEffect(() => {
     const fetchQueueCount = async () => {
@@ -131,15 +127,22 @@ export function PurchaseForm() {
     }
   }
 
-  const handleClear = () => {
+  const handleClear = async () => {
     const hasData = items.length > 0 || !!invoiceNumber || !!vendorId
     if (hasData) {
-      if (window.confirm('Are you sure you want to clear all added purchase items and reset the form?')) {
+      const confirmed = await confirmModal({
+        title: 'Clear Purchase Form',
+        message: 'Are you sure you want to clear all added purchase items and reset the form?',
+        confirmLabel: 'Clear Form',
+        variant: 'danger'
+      })
+      if (confirmed) {
         clearPurchase()
         setError(null)
         setDuplicateWarning(null)
         setSuccess(false)
         setQueueFileName('')
+        toast.info('Purchase form reset')
       }
     } else {
       clearPurchase()
@@ -164,7 +167,7 @@ export function PurchaseForm() {
   ) => {
     try {
       if (!result) {
-        alert('Invoice extraction data is empty or invalid.')
+        toast.error('Invalid extraction data', { description: 'Invoice extraction data is empty or invalid.' })
         return
       }
 
@@ -348,7 +351,7 @@ export function PurchaseForm() {
     } catch (err: any) {
       console.error('Failed to load invoice into state:', err)
       setError(`Failed to open invoice: ${err?.message || 'Unknown error'}`)
-      alert(`Could not load invoice data: ${err?.message || 'Unknown error'}`)
+      toast.error('Could not load invoice data', { description: err?.message || 'Unknown error' })
     }
   }
 
@@ -587,38 +590,28 @@ export function PurchaseForm() {
         <>
           {/* Notifications */}
           {error && (
-            <div className="p-3 text-sm font-semibold text-destructive bg-destructive/10 rounded-md border border-destructive/20 flex items-center justify-between animate-in fade-in">
-              <span>{error}</span>
-              <button
-                type="button"
-                onClick={() => setError(null)}
-                className="text-xs underline hover:opacity-80 cursor-pointer"
-              >
-                Dismiss
-              </button>
-            </div>
+            <AlertBanner
+              type="error"
+              message={error}
+              onDismiss={() => setError(null)}
+            />
           )}
 
           {success && (
-            <div className="p-3 text-sm font-semibold text-emerald-800 bg-emerald-50 rounded-md border border-emerald-300 animate-in fade-in">
-              Purchase Invoice #{invoiceNumber} saved successfully to inventory!
-            </div>
+            <AlertBanner
+              type="success"
+              message={`Purchase Invoice #${invoiceNumber} saved successfully to inventory!`}
+              onDismiss={() => setSuccess(false)}
+            />
           )}
 
           {duplicateWarning && (
-            <div className="p-3 text-sm font-semibold text-red-600 bg-red-50 rounded-md border border-red-300 flex items-center justify-between animate-in fade-in">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-                <span>{duplicateWarning}</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="text-xs font-bold underline hover:text-red-800 ml-4 cursor-pointer"
-              >
-                Clear Added Data
-              </button>
-            </div>
+            <AlertBanner
+              type="warning"
+              message={duplicateWarning}
+              details="You can clear existing items or change the invoice number above."
+              onDismiss={() => setDuplicateWarning(null)}
+            />
           )}
 
           {/* Invoice Header Form */}

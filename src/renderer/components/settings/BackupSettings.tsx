@@ -3,6 +3,9 @@ import { IPC_CHANNELS } from '../../../shared/ipc-channels'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { DatabaseBackup, RotateCcw, AlertTriangle, CheckCircle, Loader2, HardDriveDownload, History } from 'lucide-react'
 
+import { toast } from '../../store/toast.store'
+import { confirmModal } from '../../store/confirm.store'
+
 export function BackupSettings() {
   const queryClient = useQueryClient()
   const [isRestoring, setIsRestoring] = useState(false)
@@ -20,10 +23,10 @@ export function BackupSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['backups'] })
-      alert('Backup created successfully in your Documents folder!')
+      toast.success('Backup created successfully', 'Archive saved to your Documents folder.')
     },
     onError: (err: any) => {
-      alert(`Failed to create backup: ${err.message}`)
+      toast.error('Failed to create backup', err.message)
     }
   })
 
@@ -34,12 +37,18 @@ export function BackupSettings() {
     },
     onError: (err: any) => {
       setIsRestoring(false)
-      alert(`Restore failed: ${err.message}`)
+      toast.error('Database restore failed', err.message)
     }
   })
 
-  const handleRestore = (path: string) => {
-    if (confirm('WARNING: This will replace your current database and restart the application. Any unsaved data will be lost. Are you sure you want to proceed?')) {
+  const handleRestore = async (path: string) => {
+    const confirmed = await confirmModal({
+      title: 'Restore Database Archive',
+      message: 'WARNING: This will replace your current database and restart the application. Any unsaved data will be lost. Are you sure you want to proceed?',
+      confirmText: 'Restore & Restart',
+      variant: 'danger'
+    })
+    if (confirmed) {
       restoreMutation.mutate(path)
     }
   }

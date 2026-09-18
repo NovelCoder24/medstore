@@ -42,7 +42,7 @@ export function UpdateNotification() {
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
             {updateInfo.status === 'downloading' ? (
-              <Download className="w-4 h-4 animate-bounce" />
+              <Download className="w-4 h-4 animate-pulse" />
             ) : updateInfo.status === 'ready' ? (
               <Sparkles className="w-4 h-4 text-emerald-400" />
             ) : (

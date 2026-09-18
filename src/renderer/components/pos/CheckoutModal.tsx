@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useCustomerSearch } from '../../hooks/useCustomers'
 import { formatPaise } from '../../../shared/utils/paise'
 import { CheckCircle2, Loader2, X, AlertTriangle, Search } from 'lucide-react'
+import { AlertBanner } from '../common/AlertBanner'
 
 interface CheckoutModalProps {
   isOpen: boolean
@@ -34,6 +35,33 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
 
   const [isPrinting, setIsPrinting] = useState(false)
   const isPrintingRef = React.useRef(false)
+
+  // Hotkeys 1-4 to switch payment mode when not typing in text fields
+  React.useEffect(() => {
+    if (!isOpen || success) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      const activeTag = document.activeElement?.tagName
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return
+
+      if (e.key === '1') {
+        e.preventDefault()
+        setPaymentMode('CASH')
+      } else if (e.key === '2') {
+        e.preventDefault()
+        setPaymentMode('UPI')
+      } else if (e.key === '3') {
+        e.preventDefault()
+        setPaymentMode('CARD')
+      } else if (e.key === '4') {
+        e.preventDefault()
+        setPaymentMode('CREDIT')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, success])
 
   // Issue 7: Re-fetch batch quantities whenever Checkout Modal opens
   React.useEffect(() => {
@@ -248,10 +276,11 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
               </div>
 
               {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-500/10 rounded-md flex gap-2 items-start">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <p>{error}</p>
-                </div>
+                <AlertBanner
+                  type="error"
+                  message={error}
+                  onDismiss={() => setError(null)}
+                />
               )}
 
               <form onSubmit={handleCheckout} className="space-y-4">
@@ -326,20 +355,31 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                 </div>
 
                 <div className="space-y-1.5 pt-2">
-                  <label className="text-sm font-medium">Payment Mode</label>
-                  <div className="grid grid-cols-4 gap-3">
-                    {['CASH', 'UPI', 'CARD', 'CREDIT'].map(mode => (
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium">Payment Mode</label>
+                    <span className="text-[11px] text-muted-foreground">Hotkeys: 1 - 4</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { key: 'CASH', num: '1', label: 'Cash' },
+                      { key: 'UPI', num: '2', label: 'UPI' },
+                      { key: 'CARD', num: '3', label: 'Card' },
+                      { key: 'CREDIT', num: '4', label: 'Khata' }
+                    ].map(({ key, num, label }) => (
                       <button
-                        key={mode}
+                        key={key}
                         type="button"
-                        onClick={() => setPaymentMode(mode as any)}
-                        className={`py-2 px-3 border rounded-md text-sm font-medium transition-colors ${
-                          paymentMode === mode 
-                            ? 'bg-primary/10 border-primary text-primary' 
-                            : 'hover:bg-muted'
+                        onClick={() => setPaymentMode(key as any)}
+                        className={`py-2 px-2 border rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          paymentMode === key 
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs' 
+                            : 'hover:bg-muted text-slate-700 bg-background'
                         }`}
                       >
-                        {mode}
+                        <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${paymentMode === key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'}`}>
+                          {num}
+                        </span>
+                        <span>{label}</span>
                       </button>
                     ))}
                   </div>

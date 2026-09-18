@@ -14,6 +14,8 @@ import { formatStock } from '../../../shared/utils/pack-size'
 import { ImportCsvModal } from '../import/ImportCsvModal'
 import { ProductFormModal } from './ProductFormModal'
 import type { Product } from '../../../main/services/product.service'
+import { toast } from '../../store/toast.store'
+import { confirmModal, promptModal } from '../../store/confirm.store'
 
 // ── Status badge styles ──
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -57,7 +59,7 @@ function BatchEditModal({ batch, packSize, onClose, onSave }: {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!reason.trim()) {
-      alert('Please provide a reason for this change (required for audit trail).')
+      toast.warning('Audit Reason Required', { description: 'Please provide a reason for this change (required for audit trail).' })
       return
     }
 
@@ -179,7 +181,14 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
   }, [isOpen])
 
   const changeStatus = async (newStatus: string) => {
-    const reason = prompt(`Reason for changing status to "${newStatus}"?`)
+    setIsOpen(false)
+    const reason = await promptModal({
+      title: 'Batch Status Change',
+      message: `Provide a reason for changing batch status to "${newStatus}":`,
+      placeholder: 'e.g., Supplier recall, customer return, audit adjustment',
+      confirmLabel: 'Update Status',
+      required: true,
+    })
     if (!reason) return
     try {
       await window.api.invoke(IPC_CHANNELS.BATCHES_UPDATE_STATUS, {
@@ -191,10 +200,10 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
       queryClient.invalidateQueries({ queryKey: ['productBatches'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       onRefresh()
+      toast.success(`Batch status updated to ${newStatus}`)
     } catch (err: any) {
-      alert(`Failed: ${err.message}`)
+      toast.error('Failed to change status', { description: err.message })
     }
-    setIsOpen(false)
   }
 
   const handleSaveBatchEdit = async (data: any, reason: string) => {
@@ -209,8 +218,9 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
       queryClient.invalidateQueries({ queryKey: ['products'] })
       onRefresh()
       setIsEditing(false)
+      toast.success('Batch details saved')
     } catch (err: any) {
-      alert(`Failed: ${err.message}`)
+      toast.error('Failed to update batch', { description: err.message })
     }
   }
 
@@ -246,14 +256,22 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
 
             <button
               onClick={async () => {
-                if (window.confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
+                setIsOpen(false)
+                const confirmed = await confirmModal({
+                  title: 'Delete Batch',
+                  message: `Are you sure you want to delete batch "${batch.batch_number}"? This action cannot be undone.`,
+                  confirmLabel: 'Delete Batch',
+                  variant: 'danger',
+                })
+                if (confirmed) {
                   try {
                     await window.api.invoke(IPC_CHANNELS.BATCHES_DELETE, batch.id)
                     queryClient.invalidateQueries({ queryKey: ['productBatches'] })
                     queryClient.invalidateQueries({ queryKey: ['products'] })
                     onRefresh()
+                    toast.success('Batch deleted successfully')
                   } catch (err: any) {
-                    alert(`Failed to delete: ${err.message}`)
+                    toast.error('Failed to delete batch', { description: err.message })
                   }
                 }
               }}

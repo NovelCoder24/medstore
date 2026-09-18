@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useCustomers, useAcceptPayment, useCreateCustomer, useUpdateCustomer, useCustomerLedger } from '../../hooks/useCustomers'
 import { formatPaise } from '../../../shared/utils/paise'
 import { Plus, IndianRupee, Search, Loader2, User, Phone, FileText, CheckCircle2, History, X, Pill, Edit3 } from 'lucide-react'
+import { toast } from '../../store/toast.store'
 
 export function CustomerList() {
   const { data: customers, isLoading } = useCustomers()
@@ -35,10 +36,11 @@ export function CustomerList() {
         mobile: newCustomer.mobile.trim(),
         notes: newCustomer.notes.trim() || undefined
       })
+      toast.success('Patient added successfully')
       setShowAdd(false)
       setNewCustomer({ name: '', mobile: '', notes: '' })
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add customer')
+      toast.error(err instanceof Error ? err.message : 'Failed to add customer')
     }
   }
 
@@ -50,10 +52,11 @@ export function CustomerList() {
         id: editNotesModal.id,
         data: { notes: editNotesValue.trim() || null }
       })
+      toast.success('Patient notes updated')
       setEditNotesModal(null)
       setEditNotesValue('')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update patient notes')
+      toast.error(err instanceof Error ? err.message : 'Failed to update patient notes')
     }
   }
 
@@ -68,10 +71,11 @@ export function CustomerList() {
         customerId: paymentModal.id, 
         amountPaise 
       })
+      toast.success(`Payment of ₹${paymentAmount} recorded`)
       setPaymentModal(null)
       setPaymentAmount('')
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to accept payment')
+      toast.error(err instanceof Error ? err.message : 'Failed to accept payment')
     }
   }
 
