@@ -26,6 +26,8 @@ export const ocrQueueEvents = new OcrQueueEmitter()
 
 let isQueueRunning = false
 let rollingAvgDurationMs = 12000 // Default initial estimate: 12 seconds
+let currentProcessingItemId: number | null = null
+let currentAbortController: AbortController | null = null
 
 function broadcastToWindows(channel: string, payload: any) {
   try {
@@ -207,6 +209,16 @@ async function runQueueWorker() {
         break // Queue is empty
       }
 
+      // Check if item was deleted or state changed
+      const freshItem = db.prepare(`SELECT * FROM ocr_queue WHERE id = ? AND status = 'PENDING'`).get(item.id) as any
+      if (!freshItem) {
+        console.log(`[OCR-Queue] Item #${item.id} was deleted or status changed before processing. Skipping.`)
+        continue
+      }
+
+      currentProcessingItemId = item.id
+      currentAbortController = new AbortController()
+
       // Count remaining items for ETA computation
       const pendingCount = (db.prepare(`SELECT COUNT(*) as count FROM ocr_queue WHERE status = 'PENDING'`).get() as any).count
       const totalActive = (db.prepare(`SELECT COUNT(*) as count FROM ocr_queue WHERE status IN ('PENDING', 'PROCESSING')`).get() as any).count
@@ -248,8 +260,21 @@ async function runQueueWorker() {
         const fileBuffer = fs.readFileSync(item.file_path)
         const extractionResult: OcrExtractionResult = await extractInvoiceData(
           { buffer: fileBuffer, mimeType: item.mime_type },
-          item.vendor_hint_id ? { vendorId: item.vendor_hint_id } : undefined
+          item.vendor_hint_id ? { vendorId: item.vendor_hint_id } : undefined,
+          currentAbortController.signal
         )
+
+        // Verify item was not deleted while extraction was in-flight
+        if (currentAbortController.signal.aborted) {
+          console.log(`[OCR-Queue] Extraction was aborted for item #${item.id}. Discarding result.`)
+          continue
+        }
+
+        const stillExists = db.prepare(`SELECT id FROM ocr_queue WHERE id = ?`).get(item.id)
+        if (!stillExists) {
+          console.log(`[OCR-Queue] Item #${item.id} was deleted during extraction. Discarding result.`)
+          continue
+        }
 
         // 2. Pre-compute catalog matching and flag reasons in the background!
         const enrichedItems = preComputeItemMatchingAndFlags(extractionResult.items)
@@ -304,6 +329,18 @@ async function runQueueWorker() {
         await new Promise(resolve => setTimeout(resolve, MIN_DELAY_MS))
 
       } catch (err: any) {
+        if (err?.message === 'ABORTED' || currentAbortController?.signal.aborted) {
+          console.log(`[OCR-Queue] Processing aborted for item #${item.id}`)
+          continue
+        }
+
+        // If item was deleted while error occurred, skip updating database
+        const stillExists = db.prepare(`SELECT id FROM ocr_queue WHERE id = ?`).get(item.id)
+        if (!stillExists) {
+          console.log(`[OCR-Queue] Item #${item.id} was deleted. Skipping error update.`)
+          continue
+        }
+
         const durationMs = Date.now() - startTime
         const isRateLimit = err?.message?.includes('429') || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('quota')
         const errorMsg = err?.message || 'Unknown OCR processing error'
@@ -349,10 +386,15 @@ async function runQueueWorker() {
           // Cooldown before next item
           await new Promise(resolve => setTimeout(resolve, MIN_DELAY_MS))
         }
+      } finally {
+        currentProcessingItemId = null
+        currentAbortController = null
       }
     }
   } finally {
     isQueueRunning = false
+    currentProcessingItemId = null
+    currentAbortController = null
     ocrQueueEvents.emit('progress', {
       status: 'IDLE',
       currentIndex: 0,
@@ -617,6 +659,14 @@ export function registerOcrQueueHandlers() {
 
   // 6. Delete queue item and remove physical file from disk
   ipcMain.handle(IPC_CHANNELS.OCR_QUEUE_DELETE, (_, id: number) => {
+    // If the currently processing item is being deleted, abort its in-flight processing immediately
+    if (currentProcessingItemId === id && currentAbortController) {
+      console.log(`[OCR-Queue] Aborting active processing for deleted item #${id}`)
+      currentAbortController.abort()
+      currentAbortController = null
+      currentProcessingItemId = null
+    }
+
     const row = db.prepare(`SELECT file_path FROM ocr_queue WHERE id = ?`).get(id) as { file_path: string } | undefined
     if (row && row.file_path && fs.existsSync(row.file_path)) {
       try {
@@ -629,11 +679,23 @@ export function registerOcrQueueHandlers() {
     const info = db.prepare(`DELETE FROM ocr_queue WHERE id = ?`).run(id)
 
     if (info.changes > 0) {
+      const summary = getQueueSummaryCounts()
       ocrQueueEvents.emit('updated', {
         type: 'DELETED',
         itemId: id,
-        summary: getQueueSummaryCounts()
+        summary
       })
+
+      // If no active items remain in queue, broadcast IDLE progress immediately
+      if (summary.pending === 0 && summary.processing === 0) {
+        ocrQueueEvents.emit('progress', {
+          status: 'IDLE',
+          currentIndex: 0,
+          totalCount: 0,
+          pendingCount: 0,
+          estimatedSecondsRemaining: 0
+        })
+      }
     }
     return { success: info.changes > 0 }
   })
@@ -656,10 +718,21 @@ export function registerOcrQueueHandlers() {
     const info = db.prepare(`DELETE FROM ocr_queue WHERE status IN ('APPROVED', 'DISCARDED')`).run()
 
     if (info.changes > 0) {
+      const summary = getQueueSummaryCounts()
       ocrQueueEvents.emit('updated', {
         type: 'CLEARED',
-        summary: getQueueSummaryCounts()
+        summary
       })
+
+      if (summary.pending === 0 && summary.processing === 0) {
+        ocrQueueEvents.emit('progress', {
+          status: 'IDLE',
+          currentIndex: 0,
+          totalCount: 0,
+          pendingCount: 0,
+          estimatedSecondsRemaining: 0
+        })
+      }
     }
     return { clearedCount: info.changes }
   })

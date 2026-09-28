@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, Loader2, Plus, Package, Barcode } from 'lucide-react'
+import { Search, Loader2, Plus, Package } from 'lucide-react'
 import { useProducts } from '../../hooks/useProducts'
-import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { usePurchaseStore } from '../../store/purchase.store'
 import { formatPaise } from '../../../shared/utils/paise'
 
@@ -18,13 +17,6 @@ export function PurchaseProductSearch({ onProductAdded }: PurchaseProductSearchP
   const inputRef = useRef<HTMLInputElement>(null)
 
   const addItem = usePurchaseStore((s) => s.addItem)
-
-  // Hardware barcode scanner support
-  useBarcodeScanner((barcode) => {
-    setQuery(barcode)
-    setDebouncedQuery(barcode)
-    setIsOpen(true)
-  })
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -119,7 +111,7 @@ export function PurchaseProductSearch({ onProductAdded }: PurchaseProductSearchP
           ref={inputRef}
           type="text"
           className="flex-1 bg-transparent outline-none text-sm placeholder:text-slate-400 text-slate-900"
-          placeholder="Search product by Brand Name, Salt/Composition, or Scan Barcode to inward stock..."
+          placeholder="Search product by Brand Name or Salt/Composition to inward stock..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -128,10 +120,6 @@ export function PurchaseProductSearch({ onProductAdded }: PurchaseProductSearchP
           }}
         />
         {isLoading && <Loader2 className="w-4 h-4 text-slate-500 animate-spin shrink-0" />}
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0 select-none">
-          <Barcode className="w-3 h-3 text-slate-500" />
-          <span>Scanner Ready</span>
-        </div>
       </div>
 
       {/* Autocomplete Dropdown */}

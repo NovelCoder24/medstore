@@ -41,6 +41,7 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
   const [skippedNotice, setSkippedNotice] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
   const [progressEvent, setProgressEvent] = useState<OcrQueueProgressEvent | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -50,8 +51,15 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
         window.api.invoke(IPC_CHANNELS.OCR_QUEUE_LIST),
         window.api.invoke(IPC_CHANNELS.OCR_GET_DAILY_USAGE).catch(() => null)
       ])
-      setItems(list || [])
+      const fetchedItems = list || []
+      setItems(fetchedItems)
       if (usage) setDailyUsage(usage)
+
+      // If no active items remain in queue, immediately clear progress banner
+      const hasActive = fetchedItems.some((i: OcrQueueSummaryItem) => i.status === 'PROCESSING' || i.status === 'PENDING')
+      if (!hasActive) {
+        setProgressEvent(null)
+      }
     } catch (err) {
       console.error('Failed to load OCR queue list:', err)
     } finally {
@@ -69,7 +77,11 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
 
     // Listen to real-time progress & ETA countdown events
     const unsubscribeProgress = window.api.on(IPC_CHANNELS.OCR_QUEUE_PROGRESS, (progress: OcrQueueProgressEvent) => {
-      setProgressEvent(progress)
+      if (progress.status === 'IDLE') {
+        setProgressEvent(null)
+      } else {
+        setProgressEvent(progress)
+      }
     })
 
     // Listen to global clipboard paste for invoice photos / PDFs
@@ -151,6 +163,33 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
     }
   }
 
+  const handleClipboardPasteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      if (navigator.clipboard?.read) {
+        const clipboardItems = await navigator.clipboard.read()
+        const files: File[] = []
+        for (const item of clipboardItems) {
+          for (const type of item.types) {
+            if (type.startsWith('image/') || type === 'application/pdf') {
+              const blob = await item.getType(type)
+              const ext = type === 'application/pdf' ? 'pdf' : (type.split('/')[1] || 'png')
+              const file = new File([blob], `pasted_invoice_${Date.now()}.${ext}`, { type })
+              files.push(file)
+            }
+          }
+        }
+        if (files.length > 0) {
+          await handleFilesUpload(files)
+          return
+        }
+      }
+      toast.info('Press Ctrl+V anywhere to paste your copied invoice.')
+    } catch {
+      toast.info('Press Ctrl+V anywhere to paste your copied invoice.')
+    }
+  }
+
   const handleReviewItem = async (summaryItem: OcrQueueSummaryItem) => {
     setOpeningItemId(summaryItem.id)
     try {
@@ -192,12 +231,22 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
     })
     if (confirmed) {
       try {
+        // Optimistically remove from state so the item disappears immediately
+        setItems(prev => {
+          const updated = prev.filter(i => i.id !== id)
+          const stillHasActive = updated.some(i => i.status === 'PROCESSING' || i.status === 'PENDING')
+          if (!stillHasActive) {
+            setProgressEvent(null)
+          }
+          return updated
+        })
         await window.api.invoke(IPC_CHANNELS.OCR_QUEUE_DELETE, id)
         toast.success('Invoice removed from queue')
         await loadQueue()
       } catch (err: any) {
         console.error('Failed to delete item:', err)
         toast.error('Failed to delete item', { description: err?.message })
+        await loadQueue()
       }
     }
   }
@@ -213,58 +262,49 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
     }
   }
 
-  const filteredItems = items.filter(item => {
-    if (statusFilter === 'ALL') return true
-    return item.status === statusFilter
-  })
-
-  const readyCount = items.filter(i => i.status === 'READY').length
+  const readyItems = items.filter(i => i.status === 'READY')
+  const readyCount = readyItems.length
   const processingCount = items.filter(i => i.status === 'PROCESSING').length
   const pendingCount = items.filter(i => i.status === 'PENDING').length
   const failedCount = items.filter(i => i.status === 'FAILED').length
   const approvedCount = items.filter(i => i.status === 'APPROVED').length
 
-  const isQueueActive = progressEvent?.status === 'PROCESSING' || processingCount > 0 || pendingCount > 0
+  const totalPendingValue = readyItems.reduce((acc, curr) => acc + (curr.totalAmountPreview || 0), 0)
+  const isQueueActive = (processingCount > 0 || pendingCount > 0) && progressEvent !== null && progressEvent.status === 'PROCESSING'
+
+  const filteredItems = items.filter(item => {
+    if (statusFilter === 'ALL') return true
+    if (statusFilter === 'READY') return item.status === 'READY'
+    if (statusFilter === 'PROCESSING') return item.status === 'PROCESSING' || item.status === 'PENDING'
+    if (statusFilter === 'APPROVED') return item.status === 'APPROVED'
+    if (statusFilter === 'FAILED') return item.status === 'FAILED'
+    return true
+  })
 
   return (
-    <div className="flex flex-col h-full bg-background space-y-6 p-6 overflow-y-auto">
-      {/* Daily AI Usage Banner */}
-      {dailyUsage && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-muted/40 border rounded-xl text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-muted-foreground">Daily AI Scans:</span>
-            <span className={`inline-flex items-center gap-1 font-bold px-2.5 py-0.5 rounded-full border text-[11px] ${
-              dailyUsage.isAtLimit
-                ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900'
-                : dailyUsage.isApproachingLimit
-                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900'
-            }`}>
-              {dailyUsage.isAtLimit ? '🛑' : dailyUsage.isApproachingLimit ? '⚠️' : '⚡'}
-              {dailyUsage.count} / {dailyUsage.limit} used today
-            </span>
-          </div>
-
-          {dailyUsage.isApproachingLimit && !dailyUsage.isAtLimit && (
-            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-              ⚠️ Approaching daily free tier limit ({dailyUsage.limit - dailyUsage.count} scans remaining today)
-            </span>
-          )}
-
-          {dailyUsage.isAtLimit && (
-            <span className="text-[11px] font-bold text-red-600 dark:text-red-400">
-              Daily quota limit reached. Please use manual inward entry or resume scans tomorrow.
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Upload Zone & Actions Banner */}
+    <div className="flex flex-col h-full bg-slate-50/60 p-6 space-y-5 overflow-y-auto">
+      {/* ── REFINED UPLOAD & DROPZONE SECTION ── */}
       <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-        className="border-2 border-dashed border-primary/30 hover:border-primary/70 bg-primary/5 hover:bg-primary/10 transition-all rounded-xl p-6 text-center cursor-pointer relative"
-        onClick={() => fileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragging(true)
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(e) => {
+          setIsDragging(false)
+          handleDrop(e)
+        }}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('button, kbd, a, input')) return
+          fileInputRef.current?.click()
+        }}
+        className={`group relative rounded-2xl border-2 border-dashed transition-all duration-300 py-8 px-6 text-center cursor-pointer select-none overflow-hidden ${
+          isDragging
+            ? 'border-blue-500 bg-blue-50/90 shadow-md ring-4 ring-blue-100 scale-[1.005]'
+            : isUploading
+            ? 'border-blue-400 bg-gradient-to-b from-blue-50/70 via-indigo-50/30 to-slate-50/70 shadow-md ring-4 ring-blue-100/50'
+            : 'border-blue-200 hover:border-blue-400 bg-gradient-to-b from-blue-50/50 via-white to-slate-50/70 shadow-2xs hover:shadow-xs'
+        }`}
       >
         <input
           ref={fileInputRef}
@@ -274,317 +314,476 @@ export function OcrReviewQueue({ onOpenItemForReview }: OcrReviewQueueProps) {
           className="hidden"
           onChange={(e) => e.target.files && handleFilesUpload(e.target.files)}
         />
-        <div className="flex flex-col items-center justify-center space-y-2">
-          <div className="p-3 bg-primary/10 rounded-full text-primary">
-            {isUploading ? <Loader2 className="w-8 h-8 animate-spin" /> : <UploadCloud className="w-8 h-8" />}
+
+        {/* Top Animated Laser Beam during Upload */}
+        {isUploading && (
+          <div className="absolute top-0 left-0 right-0 h-1 overflow-hidden bg-blue-200/60 z-20">
+            <div className="w-full h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 animate-shimmer-slide" />
           </div>
-          <div>
-            <p className="text-sm font-bold text-foreground">
-              {isUploading ? 'Adding Invoices to Queue...' : 'Drag & Drop Multiple Invoice Photos / PDFs Here'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              or click to browse from computer (Select 5, 10, or 20 files at once). Duplicate files are skipped automatically.
-            </p>
-            <div
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-background/80 dark:bg-background/40 border px-3 py-1 rounded-full mt-2.5 font-medium shadow-2xs"
-              title="Copy an invoice photo from WhatsApp Web and press Ctrl+V anywhere in this view!"
-            >
-              <ClipboardPaste className="w-3.5 h-3.5 text-primary" />
-              <span>or press <kbd className="px-1.5 py-0.5 text-[10px] font-bold bg-muted text-foreground rounded border">Ctrl+V</kbd> to paste invoice image from WhatsApp Web / clipboard</span>
+        )}
+
+        {/* Top Badges (Quota & Real-Time Pipeline Status) */}
+        <div className="sm:absolute sm:top-4 sm:right-5 flex flex-wrap items-center justify-center sm:justify-end gap-2.5 mb-3 sm:mb-0 z-10">
+          {isQueueActive && (
+            <div className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-xs font-bold inline-flex items-center gap-2 shadow-xs relative overflow-hidden">
+              <div className="absolute inset-0 bg-white/15 animate-shimmer-slide pointer-events-none" />
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+              </span>
+              <span className="relative z-10 flex items-center gap-1.5 font-mono">
+                <span>AI Extracting {progressEvent?.currentIndex || 1} / {progressEvent?.totalCount || (pendingCount + processingCount)}</span>
+              </span>
             </div>
+          )}
+
+          {dailyUsage && (
+            <div className="h-8 px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 inline-flex items-center gap-2 shadow-2xs">
+              <span className="text-slate-500 font-medium">⚡ AI Scans:</span>
+              <span className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                dailyUsage.isAtLimit 
+                  ? 'bg-rose-100 text-rose-800 border border-rose-200' 
+                  : dailyUsage.isApproachingLimit
+                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              }`}>
+                {dailyUsage.count} / {dailyUsage.limit}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Center Dropzone Body */}
+        <div className="flex flex-col items-center justify-center max-w-lg mx-auto relative z-10">
+          {/* Upload Icon Container with Animated Pulse during Upload */}
+          <div className="relative mb-3">
+            {isUploading && (
+              <div className="absolute -inset-2 rounded-2xl bg-blue-400/25 animate-pulse-ring pointer-events-none" />
+            )}
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative z-10 ${
+              isUploading
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-blue-100/90 text-blue-600 border border-blue-200/90 shadow-2xs group-hover:scale-105 group-hover:bg-blue-600 group-hover:text-white'
+            }`}>
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-white" />
+              ) : (
+                <UploadCloud className="w-6 h-6 transition-transform group-hover:-translate-y-0.5" />
+              )}
+            </div>
+          </div>
+
+          {/* Prompt Title */}
+          <h3 className="text-sm sm:text-base font-bold text-slate-800 tracking-tight transition-colors">
+            {isUploading ? (
+              <span className="text-blue-900 font-extrabold flex items-center justify-center gap-2">
+                <span>Uploading and parsing invoices...</span>
+              </span>
+            ) : (
+              'Drag & drop distributor invoices here, or click to browse'
+            )}
+          </h3>
+
+          {/* Subtext */}
+          <p className="text-xs text-slate-600 mt-1 mb-4">
+            {isUploading ? (
+              <span className="inline-flex items-center gap-1.5 text-blue-700 font-medium">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                </span>
+                Reading image buffers and enqueuing into AI extraction pipeline
+              </span>
+            ) : (
+              'Supports multi-page PDFs, distributor tax invoices, photos & scans (PDF, JPEG, PNG)'
+            )}
+          </p>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                fileInputRef.current?.click()
+              }}
+              disabled={isUploading}
+              className={`h-10 px-5 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-95 disabled:opacity-75 cursor-pointer inline-flex items-center gap-2 ${
+                isUploading
+                  ? 'bg-blue-700 ring-2 ring-blue-400/50'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {isUploading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <UploadCloud className="w-4 h-4 text-blue-100" />
+              )}
+              <span>{isUploading ? 'Uploading Invoices...' : 'Upload Invoices (PDF / Image)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClipboardPasteClick}
+              disabled={isUploading}
+              className="h-10 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold shadow-2xs inline-flex items-center gap-2 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Paste an invoice photo directly from clipboard or WhatsApp Web"
+            >
+              <ClipboardPaste className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Paste from WhatsApp <kbd className="px-1.5 py-0.5 bg-white text-emerald-950 font-mono text-[10px] font-bold rounded border border-emerald-300">Ctrl+V</kbd></span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Notices */}
       {uploadError && (
-        <div className="p-3 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+        <div className="p-3 text-xs font-bold text-rose-900 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between shadow-2xs">
           <span>⚠️ {uploadError}</span>
-          <button onClick={() => setUploadError(null)} className="text-red-900 underline">Dismiss</button>
+          <button onClick={() => setUploadError(null)} className="text-rose-950 underline font-black cursor-pointer">Dismiss</button>
         </div>
       )}
 
       {skippedNotice && (
-        <div className="p-3 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+        <div className="p-3 text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-2xs">
           <span>ℹ️ {skippedNotice}</span>
-          <button onClick={() => setSkippedNotice(null)} className="text-amber-900 underline">Dismiss</button>
+          <button onClick={() => setSkippedNotice(null)} className="text-amber-950 underline font-black cursor-pointer">Dismiss</button>
         </div>
       )}
 
-      {/* Live Progress & ETA Countdown Banner */}
-      {isQueueActive && (
-        <div className="p-4 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl space-y-2.5 animate-in fade-in">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-bold text-blue-900 dark:text-blue-200">
-              <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-              <span>
-                Processing invoice {progressEvent?.currentIndex || 1} of {progressEvent?.totalCount || (pendingCount + processingCount)}
-              </span>
-              {progressEvent?.currentFileName && (
-                <span className="text-xs font-normal text-blue-700 dark:text-blue-300 font-mono">
-                  ({progressEvent.currentFileName})
+      {/* ── SCANNED INVOICES REVIEW HEADER ── */}
+      <div className="flex flex-col space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                Scanned Invoices
+              </h3>
+              {readyCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-800 border border-emerald-300 font-mono shadow-2xs">
+                  {readyCount} Ready to Inward
                 </span>
               )}
             </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {totalPendingValue > 0 ? (
+                <>
+                  <span className="font-extrabold text-emerald-700 font-mono tabular-nums">
+                    ₹{totalPendingValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </span>
+                  {' '}total distributor stock ready to commit into inventory.
+                </>
+              ) : (
+                'Review extracted medicine batches and commit them to stock ledger.'
+              )}
+            </p>
+          </div>
 
-            <div className="text-xs font-semibold text-blue-800 dark:text-blue-300">
-              ⏱️ ~{Math.max(1, Math.round((progressEvent?.estimatedSecondsRemaining || (pendingCount * 12)) / 60))} min remaining
-              {' '}({progressEvent?.estimatedSecondsRemaining || pendingCount * 12}s)
+          {/* Modern Segmented Status Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+            <button
+              onClick={() => setStatusFilter('READY')}
+              className={`h-8 px-3.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                statusFilter === 'READY'
+                  ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-500/30'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+              }`}
+            >
+              <span>Ready</span>
+              <span className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] ${statusFilter === 'READY' ? 'bg-emerald-700 text-white' : 'bg-emerald-200/60 text-emerald-900'}`}>
+                {readyCount}
+              </span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`h-8 px-3.5 rounded-xl transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                statusFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span>All</span>
+              <span className={`px-1.5 py-0.2 rounded-md font-mono text-[10px] ${statusFilter === 'ALL' ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
+                {items.length}
+              </span>
+            </button>
+            {(processingCount > 0 || pendingCount > 0) && (
+              <button
+                onClick={() => setStatusFilter('PROCESSING')}
+                className={`h-8 px-3.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                  statusFilter === 'PROCESSING'
+                    ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-500/30'
+                    : 'bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                <Loader2 className="w-3 h-3 animate-spin text-current" />
+                <span>Processing ({processingCount + pendingCount})</span>
+              </button>
+            )}
+            {approvedCount > 0 && (
+              <button
+                onClick={() => setStatusFilter('APPROVED')}
+                className={`h-8 px-3.5 rounded-xl transition-all cursor-pointer ${
+                  statusFilter === 'APPROVED'
+                    ? 'bg-slate-700 text-white shadow-xs'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Inwarded ({approvedCount})
+              </button>
+            )}
+            {failedCount > 0 && (
+              <button
+                onClick={() => setStatusFilter('FAILED')}
+                className={`h-8 px-3.5 rounded-xl transition-all cursor-pointer ${
+                  statusFilter === 'FAILED'
+                    ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-500/30'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                }`}
+              >
+                Failed ({failedCount})
+              </button>
+            )}
+
+            {approvedCount > 0 && (
+              <button
+                type="button"
+                onClick={handleClearCompleted}
+                className="text-[11px] text-slate-400 hover:text-slate-700 ml-1 underline cursor-pointer font-medium"
+              >
+                Clear Inwarded
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Refined Scanned Invoices List */}
+        <div className="space-y-3">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+              <Loader2 className="w-7 h-7 animate-spin text-primary mb-2" />
+              <span className="font-bold text-xs text-slate-700">Loading scanned invoices...</span>
             </div>
-          </div>
-
-          {/* Animated Progress Bar */}
-          <div className="w-full bg-blue-200 dark:bg-blue-900 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-primary h-full transition-all duration-500 rounded-full"
-              style={{
-                width: `${
-                  progressEvent && progressEvent.totalCount > 0
-                    ? Math.round(((progressEvent.totalCount - progressEvent.pendingCount) / progressEvent.totalCount) * 100)
-                    : 15
-                }%`
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Filter Tabs & Completed Cleanup */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-        <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              statusFilter === 'ALL' ? 'bg-primary text-white shadow-sm' : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            All ({items.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('READY')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-              statusFilter === 'READY' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Ready for Review ({readyCount})</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter('PROCESSING')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-              statusFilter === 'PROCESSING' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Processing ({processingCount})</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter('PENDING')}
-            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-              statusFilter === 'PENDING' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-            }`}
-          >
-            <span>Pending ({pendingCount})</span>
-          </button>
-          {failedCount > 0 && (
-            <button
-              onClick={() => setStatusFilter('FAILED')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                statusFilter === 'FAILED' ? 'bg-red-600 text-white shadow-sm' : 'bg-red-50 text-red-800 hover:bg-red-100'
-              }`}
-            >
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Failed ({failedCount})</span>
-            </button>
-          )}
-          {approvedCount > 0 && (
-            <button
-              onClick={() => setStatusFilter('APPROVED')}
-              className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                statusFilter === 'APPROVED' ? 'bg-muted text-foreground' : 'bg-muted/50 text-muted-foreground'
-              }`}
-            >
-              <CheckCheck className="w-3.5 h-3.5" />
-              <span>Inwarded ({approvedCount})</span>
-            </button>
-          )}
-        </div>
-
-        {approvedCount > 0 && (
-          <button
-            type="button"
-            onClick={handleClearCompleted}
-            className="text-xs text-muted-foreground hover:text-foreground font-medium underline"
-          >
-            Clear Completed Invoices
-          </button>
-        )}
-      </div>
-
-      {/* Queue Items List */}
-      <div className="flex-1 space-y-3">
-        {isLoading ? (
-          <div className="flex items-center justify-center p-12 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-            <span>Loading invoice queue...</span>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground border rounded-xl bg-card">
-            <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-sm font-semibold">No invoices in this view.</p>
-            <p className="text-xs mt-1">Upload images or PDFs above to start batch OCR processing.</p>
-          </div>
-        ) : (
-          filteredItems.map(item => (
-            <div
-              key={item.id}
-              className="p-4 border rounded-xl bg-card hover:border-primary/40 transition-all flex flex-wrap items-center justify-between gap-4 shadow-sm"
-            >
-              {/* Left Column: File Details & Preview */}
-              <div className="flex items-center gap-3.5 min-w-[240px]">
-                <div className="p-2.5 bg-muted rounded-lg text-primary">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-foreground truncate max-w-[260px]" title={item.fileName}>
-                      {item.fileName}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
-                      #{item.id}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Added: {item.createdAt} • {(item.fileSizeBytes / 1024).toFixed(0)} KB
-                  </p>
-                </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 border border-slate-200 rounded-2xl bg-white shadow-2xs">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-3 text-blue-600">
+                <FileText className="w-6 h-6" />
               </div>
+              <h4 className="text-sm font-bold text-slate-900">
+                {statusFilter === 'READY' ? 'All Invoices Inwarded & Up to Date' : 'No invoices in this view'}
+              </h4>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                {statusFilter === 'READY'
+                  ? 'There are no pending invoices waiting for inward review. Drop invoice PDFs or WhatsApp images above to scan distributor stock.'
+                  : 'No invoices currently match the selected status filter.'}
+              </p>
+            </div>
+          ) : (
+            filteredItems.map(item => {
+              const isPdf = item.fileName?.toLowerCase().endsWith('.pdf')
+              const isReady = item.status === 'READY'
 
-              {/* Middle Column: Extracted Metadata & Flags */}
-              <div className="flex-1 min-w-[220px]">
-                {item.status === 'READY' || item.status === 'APPROVED' ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-foreground truncate max-w-[200px]">
-                        {item.vendorNamePreview || 'Unknown Supplier'}
-                      </span>
-                      {item.invoiceNumberPreview && (
-                        <span className="text-[11px] text-muted-foreground">
-                          (Inv #{item.invoiceNumberPreview})
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border transition-all duration-300 p-4 shadow-2xs hover:shadow-xs relative overflow-hidden ${
+                    isReady
+                      ? 'bg-white hover:bg-emerald-50/15 border-emerald-200 hover:border-emerald-300 ring-1 ring-emerald-500/10'
+                      : item.status === 'PROCESSING'
+                      ? 'bg-gradient-to-r from-blue-50/60 via-white to-indigo-50/30 border-blue-400 ring-2 ring-blue-500/20 shadow-xs'
+                      : item.status === 'PENDING'
+                      ? 'bg-white border-blue-200/90 ring-1 ring-blue-500/10'
+                      : item.status === 'FAILED'
+                      ? 'bg-white border-rose-200 ring-1 ring-rose-500/10'
+                      : 'bg-slate-50/70 border-slate-200 opacity-90'
+                  }`}
+                >
+                  {/* Top Animated Laser Beam during active extraction */}
+                  {item.status === 'PROCESSING' && (
+                    <div className="absolute top-0 left-0 right-0 h-1 overflow-hidden bg-blue-100 z-10">
+                      <div className="w-full h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600 animate-shimmer-slide" />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    {/* Left: Document Pill & File Info */}
+                    <div className="flex items-center gap-3.5 min-w-[240px]">
+                      <div className={`px-2.5 py-1.5 rounded-xl border font-mono text-xs font-black shrink-0 shadow-2xs transition-all ${
+                        isPdf 
+                          ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      } ${item.status === 'PROCESSING' ? 'ring-2 ring-blue-400/80 animate-pulse' : ''}`}>
+                        {isPdf ? 'PDF' : 'IMG'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 truncate max-w-[240px]" title={item.fileName}>
+                            {item.fileName}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded font-semibold shrink-0">
+                            #{item.id}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                          {item.createdAt} • {(item.fileSizeBytes / 1024).toFixed(0)} KB
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Middle: Extracted Details & Verification */}
+                    <div className="flex-1 min-w-[260px]">
+                      {isReady || item.status === 'APPROVED' ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-extrabold text-slate-900 truncate max-w-[260px]" title={item.vendorNamePreview || 'Unknown Supplier'}>
+                              {item.vendorNamePreview || <span className="text-slate-400 italic font-normal">Unknown Supplier</span>}
+                            </span>
+                            {item.invoiceNumberPreview && (
+                              <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                Inv #{item.invoiceNumberPreview}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <span>
+                              Total:{' '}
+                              <span className="text-emerald-700 font-bold text-xs mr-0.5">₹</span>
+                              <strong className="text-slate-950 font-mono tabular-nums font-black text-base">
+                                {(item.totalAmountPreview || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </strong>
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-600 font-semibold">{item.itemCount} items</span>
+                            <span className="text-slate-300">•</span>
+                            {item.flaggedCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
+                                <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                                {item.flaggedCount} flagged
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-full">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                All verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : item.status === 'FAILED' ? (
+                        <div className="text-xs text-rose-800 bg-rose-50 p-2.5 rounded-xl border border-rose-200 font-medium">
+                          <strong className="font-bold text-rose-950">Scan Error:</strong> {item.errorMessage}
+                        </div>
+                      ) : item.status === 'PROCESSING' ? (
+                        <div className="text-xs text-blue-900 bg-blue-50/90 p-3 rounded-xl border border-blue-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 font-medium shadow-2xs relative overflow-hidden">
+                          <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-2.5 w-2.5 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-blue-950 font-extrabold flex items-center gap-1.5">
+                                <span>Extracting items, batches & taxes with AI...</span>
+                                <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                              </span>
+                              <span className="text-[11px] text-blue-700 font-normal">Gemini OCR vision pipeline reading bill items</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            <div className="w-24 h-1.5 bg-blue-200/80 rounded-full overflow-hidden relative">
+                              <div className="h-full w-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full animate-shimmer-slide" />
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-blue-900 uppercase tracking-wider">
+                              Scanning
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-700 bg-slate-100/90 p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between gap-2 font-medium">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            <span className="text-slate-800 font-semibold">Queued for AI extraction</span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            Waiting
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      {isReady && (
+                        <button
+                          type="button"
+                          disabled={openingItemId === item.id}
+                          onClick={() => handleReviewItem(item)}
+                          className="h-9 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                        >
+                          {openingItemId === item.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Opening Invoice...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-blue-200" />
+                              <span>Review & Inward</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {item.status === 'PROCESSING' && (
+                        <span className="h-9 px-3 text-xs font-bold text-blue-900 bg-blue-100/90 border border-blue-300 rounded-xl inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap animate-pulse">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-700" />
+                          <span>Extracting...</span>
                         </span>
                       )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>Total: <strong className="text-foreground">₹{(item.totalAmountPreview || 0).toFixed(2)}</strong></span>
-                      <span>• {item.itemCount} items</span>
-                      {item.flaggedCount > 0 ? (
-                        <span className="text-amber-600 font-semibold">• {item.flaggedCount} flagged</span>
-                      ) : (
-                        <span className="text-emerald-600 font-semibold">• All verified</span>
+
+                      {item.status === 'PENDING' && (
+                        <span className="h-9 px-3 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-xl inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Queued</span>
+                        </span>
                       )}
+
+                      {item.status === 'APPROVED' && (
+                        <span className="h-9 px-3 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-xl inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap">
+                          <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          Inwarded
+                        </span>
+                      )}
+
+                      {item.status === 'FAILED' && (
+                        <button
+                          type="button"
+                          onClick={() => handleRetry(item.id)}
+                          className="h-9 px-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold shadow-2xs inline-flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+                        >
+                          <RotateCw className="w-3 h-3 text-slate-600" />
+                          <span>Retry</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item.id)}
+                        className="h-9 w-9 flex items-center justify-center text-slate-500 hover:text-rose-700 hover:bg-rose-100/70 rounded-xl transition cursor-pointer border border-transparent hover:border-rose-200 shrink-0"
+                        title="Remove from queue"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                ) : item.status === 'FAILED' ? (
-                  <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/50 p-2 rounded border border-red-200">
-                    <strong>Failed:</strong> {item.errorMessage}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    {item.status === 'PROCESSING' ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                        <span className="text-blue-700 font-medium">Extracting products and prices...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Waiting in queue to process...</span>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Right Column: Status Badge & Actions */}
-              <div className="flex items-center gap-2">
-                {/* Status Badges */}
-                {item.status === 'READY' && (
-                  <span className="px-2.5 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 rounded-md flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Ready
-                  </span>
-                )}
-                {item.status === 'PROCESSING' && (
-                  <span className="px-2.5 py-1 text-xs font-bold text-blue-800 bg-blue-100 rounded-md flex items-center gap-1 animate-pulse">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Processing
-                  </span>
-                )}
-                {item.status === 'PENDING' && (
-                  <span className="px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-100 rounded-md">
-                    Pending
-                  </span>
-                )}
-                {item.status === 'FAILED' && (
-                  <span className="px-2.5 py-1 text-xs font-bold text-red-800 bg-red-100 rounded-md">
-                    Failed
-                  </span>
-                )}
-                {item.status === 'APPROVED' && (
-                  <span className="px-2.5 py-1 text-xs font-bold text-muted-foreground bg-muted rounded-md flex items-center gap-1">
-                    <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    Inwarded
-                  </span>
-                )}
-
-                {/* Primary Action Button */}
-                {item.status === 'READY' && (
-                  <button
-                    type="button"
-                    disabled={openingItemId === item.id}
-                    onClick={() => handleReviewItem(item)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-md transition-all shadow-sm disabled:opacity-60 cursor-pointer"
-                  >
-                    {openingItemId === item.id ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Opening...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Review & Inward</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {item.status === 'FAILED' && (
-                  <button
-                    type="button"
-                    onClick={() => handleRetry(item.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-foreground bg-muted hover:bg-muted/80 rounded-md border"
-                  >
-                    <RotateCw className="w-3 h-3" />
-                    <span>Retry</span>
-                  </button>
-                )}
-
-                {/* Delete / Discard */}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(item.id)}
-                  className="p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded hover:bg-muted"
-                  title="Remove from queue"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+                </div>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )
 }
+
+

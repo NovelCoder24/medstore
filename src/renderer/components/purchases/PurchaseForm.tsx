@@ -396,27 +396,41 @@ export function PurchaseForm() {
     setSuccess(false)
 
     try {
-      // Auto-create any unmatched dummy products in the database
-      const resolvedItems = await Promise.all(
-        items.map(async item => {
-          if (item.needsProductLink || !item.productId) {
+      // Auto-create any unmatched dummy products in the database with client-side deduplication
+      const createdProductMap = new Map<string, number>()
+      const resolvedItems: typeof items = []
+
+      for (const item of items) {
+        if (item.needsProductLink || !item.productId) {
+          const rawName = item.brandName && item.brandName !== '(unrecognized)' 
+            ? item.brandName 
+            : item.ocrProductNameRaw || 'Unknown Product'
+          const packSize = item.packSize || 1
+          const cacheKey = `${rawName.trim().toUpperCase()}::${packSize}`
+
+          let productId = createdProductMap.get(cacheKey)
+          if (!productId) {
             const newProduct = await window.api.invoke(IPC_CHANNELS.PRODUCTS_CREATE, {
-              brand_name: item.brandName && item.brandName !== '(unrecognized)' ? item.brandName : item.ocrProductNameRaw || 'Unknown Product',
+              brand_name: rawName,
               category: 'GENERIC',
               schedule_flag: 'NONE',
-              pack_size: item.packSize || 1,
+              pack_size: packSize,
               gst_rate_pct: item.gstRatePct || 12,
               hsn_code: item.hsnCode || '3004'
             })
-            return {
-              ...item,
-              productId: newProduct.id,
-              needsProductLink: false
-            }
+            productId = newProduct.id
+            createdProductMap.set(cacheKey, productId)
           }
-          return item
-        })
-      )
+
+          resolvedItems.push({
+            ...item,
+            productId,
+            needsProductLink: false
+          })
+        } else {
+          resolvedItems.push(item)
+        }
+      }
 
       const payload = {
         vendorId,
@@ -524,8 +538,8 @@ export function PurchaseForm() {
               <Layers className="w-4 h-4" />
               <span>Review Queue</span>
               {queueReadyCount > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-extrabold bg-emerald-600 text-white rounded-full">
-                  {queueReadyCount}
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-full font-mono shadow-2xs">
+                  {queueReadyCount} Ready
                 </span>
               )}
             </button>

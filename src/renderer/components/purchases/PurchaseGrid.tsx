@@ -485,11 +485,10 @@ export function PurchaseGrid() {
             </div>
             <h3 className="font-bold text-base text-slate-900">No purchase line items yet</h3>
             <p className="text-xs text-slate-500 max-w-md mt-1 mb-5 leading-relaxed">
-              Use the product search bar above to search by brand name, generic composition, or scan a barcode to add medicines to this inward invoice.
+              Use the product search bar above to search by brand name or generic composition to add medicines to this inward invoice.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-semibold text-slate-500">
               <span className="px-2.5 py-1 bg-slate-100 rounded-lg border border-slate-200/80">📦 Instant Product Catalog Search</span>
-              <span className="px-2.5 py-1 bg-slate-100 rounded-lg border border-slate-200/80">⚡ Barcode Scanner Supported</span>
               <span className="px-2.5 py-1 bg-slate-100 rounded-lg border border-slate-200/80">🧾 Auto-computes GST &amp; Margins</span>
             </div>
           </div>
