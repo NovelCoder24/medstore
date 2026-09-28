@@ -216,8 +216,8 @@ function pruneOldInvoiceImages(): number {
 export function startScheduledBackups() {
   if (backupInterval) clearInterval(backupInterval)
   
-  // Run every 2 hours (2 * 60 * 60 * 1000)
-  const TWO_HOURS_MS = 2 * 60 * 60 * 1000
+  // Run once every 24 hours (24 * 60 * 60 * 1000)
+  const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
   backupInterval = setInterval(async () => {
     console.log('Running scheduled background backup...')
     try {
@@ -232,6 +232,6 @@ export function startScheduledBackups() {
     } catch (error) {
       console.error('Scheduled backup failed:', error)
     }
-  }, TWO_HOURS_MS)
+  }, TWENTY_FOUR_HOURS_MS)
 }
 

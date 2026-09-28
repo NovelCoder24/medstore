@@ -23,6 +23,7 @@ import * as m012 from './012_vendor_unique_indexes'
 import * as m013 from './013_foreign_key_performance_indexes'
 import * as m014 from './014_ocr_queue'
 import * as m015 from './015_customer_notes'
+import * as m016 from './016_remove_barcode_and_cleanup'
 
 export interface Migration {
   version: number
@@ -45,7 +46,8 @@ export const migrations: Migration[] = [
   m012,
   m013,
   m014,
-  m015
+  m015,
+  m016
 ].sort(
   (a, b) => a.version - b.version
 )

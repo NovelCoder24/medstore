@@ -40,8 +40,8 @@ function runImport() {
     const insertProduct = db.prepare(`
       INSERT INTO products (
         brand_name, generic_name, manufacturer, category, 
-        pack_size, barcode, gst_rate_pct, schedule_flag
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        pack_size, gst_rate_pct, schedule_flag
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
 
     db.transaction(() => {
@@ -58,15 +58,16 @@ function runImport() {
           const packSize = parseInt(row.pack_size) || 1
           const gstRate = parseFloat(row.gst_rate_pct) || 12
           const schedule = row.schedule_flag || 'NONE'
-          const barcode = row.barcode || null
 
-          if (barcode) {
-            // Check if exists to avoid unique constraint error
-            const exists = db.prepare('SELECT id FROM products WHERE barcode = ?').get(barcode)
-            if (exists) {
-              skipped++
-              continue
-            }
+          // Check if exists to avoid creating duplicate active products
+          const normalizedName = row.brand_name.trim().toUpperCase()
+          const exists = db.prepare(`
+            SELECT id FROM products 
+            WHERE UPPER(TRIM(brand_name)) = ? AND pack_size = ? AND is_active = 1
+          `).get(normalizedName, packSize)
+          if (exists) {
+            skipped++
+            continue
           }
 
           insertProduct.run(
@@ -75,7 +76,6 @@ function runImport() {
             row.manufacturer || null,
             category,
             packSize,
-            barcode,
             gstRate,
             schedule
           )

@@ -13,7 +13,6 @@ export interface Product {
   category: ProductCategory
   composition_id: number | null
   pack_size: number
-  barcode: string | null
   hsn_code: string | null
   gst_rate_pct: number
   schedule_flag: ScheduleFlag
@@ -70,16 +69,11 @@ export function searchProducts(params: ProductSearchParams): PaginatedResult<Pro
 
   if (query && query.trim().length > 0) {
     const trimmedQuery = query.trim()
-    if (/^\d{8,14}$/.test(trimmedQuery)) {
-      conditions.push(`p.barcode = ?`)
-      values.push(trimmedQuery)
-    } else {
-      const ftsQuery = sanitizeFtsQuery(trimmedQuery)
-      if (ftsQuery.length > 0) {
-        conditions.push(`p.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)`)
-        values.push(ftsQuery)
-        hasFts = true
-      }
+    const ftsQuery = sanitizeFtsQuery(trimmedQuery)
+    if (ftsQuery.length > 0) {
+      conditions.push(`p.id IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ?)`)
+      values.push(ftsQuery)
+      hasFts = true
     }
   }
 
@@ -138,7 +132,6 @@ export function searchProducts(params: ProductSearchParams): PaginatedResult<Pro
       category: row.category,
       composition_id: row.composition_id,
       pack_size: row.pack_size,
-      barcode: row.barcode,
       hsn_code: row.hsn_code,
       gst_rate_pct: row.gst_rate_pct,
       schedule_flag: row.schedule_flag,
@@ -191,7 +184,6 @@ export function getProduct(id: number): Product | undefined {
     category: row.category,
     composition_id: row.composition_id,
     pack_size: row.pack_size,
-    barcode: row.barcode,
     hsn_code: row.hsn_code,
     gst_rate_pct: row.gst_rate_pct,
     schedule_flag: row.schedule_flag,
@@ -226,18 +218,22 @@ export interface CreateProductPayload extends Omit<Product, 'id' | 'created_at' 
 export function createProduct(data: CreateProductPayload): Product {
   const db = getDatabase()
   
-  const cleanedBarcode = data.barcode && data.barcode.trim() !== '' ? data.barcode.trim() : null
-  if (cleanedBarcode) {
-    const existing = db.prepare('SELECT id FROM products WHERE barcode = ?').get(cleanedBarcode)
-    if (existing) throw new Error('A product with this barcode already exists.')
+  const normalizedName = data.brand_name.trim().toUpperCase()
+  const existingByName = db.prepare(`
+    SELECT id FROM products 
+    WHERE UPPER(TRIM(brand_name)) = ? AND pack_size = ? AND is_active = 1
+  `).get(normalizedName, data.pack_size || 1) as { id: number } | undefined
+
+  if (existingByName) {
+    return getProduct(existingByName.id)!
   }
 
   const transaction = db.transaction((payload: CreateProductPayload) => {
     const result = db.prepare(`
       INSERT INTO products (
         brand_name, generic_name, manufacturer, category, composition_id, 
-        pack_size, barcode, hsn_code, gst_rate_pct, schedule_flag, shelf_rack
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        pack_size, hsn_code, gst_rate_pct, schedule_flag, shelf_rack
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.brand_name,
       payload.generic_name || null,
@@ -245,7 +241,6 @@ export function createProduct(data: CreateProductPayload): Product {
       payload.category || 'GENERIC',
       payload.composition_id || null,
       payload.pack_size || 1,
-      cleanedBarcode,
       payload.hsn_code || null,
       payload.gst_rate_pct ?? 12,
       payload.schedule_flag || 'NONE',
@@ -291,15 +286,6 @@ export function createProduct(data: CreateProductPayload): Product {
 
 export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'created_at'>>): Product {
   const db = getDatabase()
-  
-  const cleanedBarcode = data.barcode !== undefined 
-    ? (data.barcode && data.barcode.trim() !== '' ? data.barcode.trim() : null)
-    : undefined
-
-  if (cleanedBarcode) {
-    const existing = db.prepare('SELECT id FROM products WHERE barcode = ? AND id != ?').get(cleanedBarcode, id)
-    if (existing) throw new Error('A product with this barcode already exists.')
-  }
 
   const updates: string[] = []
   const values: any[] = []
@@ -308,9 +294,6 @@ export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'cr
   const dbData = { ...data }
   delete dbData.total_stock_units
   delete dbData.composition
-  if (data.barcode !== undefined) {
-    dbData.barcode = cleanedBarcode as any
-  }
 
   const ALLOWED_COLUMNS = new Set([
     'brand_name',
@@ -319,7 +302,6 @@ export function updateProduct(id: number, data: Partial<Omit<Product, 'id' | 'cr
     'category',
     'composition_id',
     'pack_size',
-    'barcode',
     'hsn_code',
     'gst_rate_pct',
     'schedule_flag',
@@ -505,24 +487,122 @@ export function deleteBatch(batchId: number, actorUserId?: number, reason?: stri
     const current = db.prepare('SELECT quantity, batch_number FROM batches WHERE id = ?').get(batchId) as { quantity: number; batch_number: string } | undefined
     if (!current) return
 
-    if (current.quantity > 0) {
-      db.prepare(`
-        INSERT INTO stock_ledger (
-          batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
-        ) VALUES (?, 'ADJUSTMENT', ?, ?, ?, ?)
-      `).run(
-        batchId,
-        -current.quantity,
-        actorUserId ?? null,
-        reason || 'Batch Disposed / Deleted',
-        `BATCH_DISPOSAL-${batchId}`
-      )
+    // Ensure valid actorUserId — stock_ledger.actor_user_id has NOT NULL constraint
+    let resolvedActorId = actorUserId
+    if (!resolvedActorId) {
+      const activeUser = db.prepare('SELECT id FROM users WHERE is_active = 1 ORDER BY id ASC LIMIT 1').get() as { id: number } | undefined
+      resolvedActorId = activeUser?.id || 1
     }
 
-    db.prepare('UPDATE batches SET is_active = 0, status = \'DISPOSED\', quantity = 0 WHERE id = ?').run(batchId)
+    // Check if the batch is linked to any past sales or returns invoices
+    const hasSales = db.prepare('SELECT 1 FROM sale_items WHERE batch_id = ? LIMIT 1').get(batchId)
+    const hasReturns = db.prepare('SELECT 1 FROM sales_return_items WHERE batch_id = ? LIMIT 1').get(batchId)
+    const hasSupplierReturns = db.prepare('SELECT 1 FROM supplier_return_items WHERE batch_id = ? LIMIT 1').get(batchId)
+
+    if (hasSales || hasReturns || hasSupplierReturns) {
+      // Historical compliance guard: If linked to tax invoices, zero inventory and mark DISPOSED
+      if (current.quantity > 0) {
+        db.prepare(`
+          INSERT INTO stock_ledger (
+            batch_id, movement_type, quantity_delta, actor_user_id, reason, reference_entity
+          ) VALUES (?, 'ADJUSTMENT', ?, ?, ?, ?)
+        `).run(
+          batchId,
+          -current.quantity,
+          resolvedActorId,
+          reason || 'Batch Disposed / Deleted',
+          `BATCH_DISPOSAL-${batchId}`
+        )
+      }
+      db.prepare("UPDATE batches SET is_active = 0, status = 'DISPOSED', quantity = 0 WHERE id = ?").run(batchId)
+    } else {
+      // Permanent hard-delete: No sales history exists, so safely remove completely from DB
+      db.prepare('DELETE FROM expiry_alerts WHERE batch_id = ?').run(batchId)
+      db.prepare('DELETE FROM stock_ledger WHERE batch_id = ?').run(batchId)
+      db.prepare('DELETE FROM batches WHERE id = ?').run(batchId)
+    }
+
+    try {
+      logAuditAction({
+        actorUserId: resolvedActorId,
+        action: 'BATCH_DELETE',
+        entityType: 'BATCH',
+        entityId: batchId,
+        entityName: current.batch_number,
+        beforeJson: current,
+        afterJson: null,
+        reason: reason || 'Batch deleted from catalog'
+      }, db)
+    } catch (err) {
+      console.error('Failed to log audit for batch delete:', err)
+    }
   })
 
   executeDelete()
+}
+
+export function getProductSubstitutes(productId: number): Product[] {
+  const db = getDatabase()
+  const current = db.prepare('SELECT id, composition_id, generic_name FROM products WHERE id = ?').get(productId) as any
+  if (!current) return []
+
+  let rows: any[] = []
+  if (current.composition_id) {
+    rows = db.prepare(`
+      SELECT 
+        p.*,
+        c.salt_name as comp_salt_name, c.strength as comp_strength, c.dosage_form as comp_dosage_form,
+        COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) as total_stock_units
+      FROM products p
+      LEFT JOIN compositions c ON p.composition_id = c.id
+      WHERE p.composition_id = ? AND p.id != ? AND p.is_active = 1
+        AND COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) > 0
+      ORDER BY total_stock_units DESC
+      LIMIT 6
+    `).all(current.composition_id, productId) as any[]
+  } else if (current.generic_name && current.generic_name.trim().length > 0) {
+    rows = db.prepare(`
+      SELECT 
+        p.*,
+        c.salt_name as comp_salt_name, c.strength as comp_strength, c.dosage_form as comp_dosage_form,
+        COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) as total_stock_units
+      FROM products p
+      LEFT JOIN compositions c ON p.composition_id = c.id
+      WHERE LOWER(p.generic_name) = LOWER(?) AND p.id != ? AND p.is_active = 1
+        AND COALESCE((SELECT SUM(quantity) FROM batches WHERE product_id = p.id AND status = 'ACTIVE'), 0) > 0
+      ORDER BY total_stock_units DESC
+      LIMIT 6
+    `).all(current.generic_name.trim(), productId) as any[]
+  }
+
+  return rows.map(row => {
+    const product: Product = {
+      id: row.id,
+      brand_name: row.brand_name,
+      generic_name: row.generic_name,
+      manufacturer: row.manufacturer,
+      category: row.category,
+      composition_id: row.composition_id,
+      pack_size: row.pack_size,
+      hsn_code: row.hsn_code,
+      gst_rate_pct: row.gst_rate_pct,
+      schedule_flag: row.schedule_flag,
+      shelf_rack: row.shelf_rack,
+      is_active: Boolean(row.is_active),
+      created_at: row.created_at,
+      total_stock_units: row.total_stock_units
+    }
+    if (row.composition_id) {
+      product.composition = {
+        id: row.composition_id,
+        salt_name: row.comp_salt_name,
+        strength: row.comp_strength,
+        dosage_form: row.comp_dosage_form,
+        created_at: ''
+      }
+    }
+    return product
+  })
 }
 
 export function registerProductHandlers() {
@@ -530,7 +610,13 @@ export function registerProductHandlers() {
   ipcMain.handle(IPC_CHANNELS.PRODUCTS_GET, (_, id: number) => getProduct(id))
   ipcMain.handle(IPC_CHANNELS.PRODUCTS_CREATE, (_, data) => createProduct(data))
   ipcMain.handle(IPC_CHANNELS.PRODUCTS_UPDATE, (_, args) => updateProduct(args.id, args.data))
+  ipcMain.handle(IPC_CHANNELS.PRODUCTS_GET_SUBSTITUTES, (_, productId: number) => getProductSubstitutes(productId))
   ipcMain.handle(IPC_CHANNELS.BATCHES_UPDATE, (_, payload) => updateBatch(payload))
   ipcMain.handle(IPC_CHANNELS.BATCHES_UPDATE_STATUS, (_, { batchId, newStatus, actorUserId, reason }) => updateBatchStatus(batchId, newStatus, actorUserId, reason))
-  ipcMain.handle(IPC_CHANNELS.BATCHES_DELETE, (_, batchId: number) => deleteBatch(batchId))
+  ipcMain.handle(IPC_CHANNELS.BATCHES_DELETE, (_, payload: number | { batchId: number; actorUserId?: number; reason?: string }) => {
+    if (typeof payload === 'number') {
+      return deleteBatch(payload)
+    }
+    return deleteBatch(payload.batchId, payload.actorUserId, payload.reason)
+  })
 }
