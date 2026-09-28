@@ -25,10 +25,17 @@ export function PosBilling() {
 
   const totals = getTotals()
 
-  // F12 Hotkey for checkout, F6 Hotkey for parking current bill
+  // F2 to focus search, F12 Hotkey for checkout, F6 Hotkey for parking current bill
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'F12') {
+      if (e.key === 'F2') {
+        e.preventDefault()
+        const input = document.getElementById('pos-product-search-input') as HTMLInputElement | null
+        if (input) {
+          input.focus()
+          input.select()
+        }
+      } else if (e.key === 'F12') {
         e.preventDefault()
         if (items.length > 0) {
           setIsCheckoutOpen(true)
@@ -218,7 +225,7 @@ export function PosBilling() {
             </button>
 
             <p className="text-xs text-center text-muted-foreground">
-              Press <kbd className="px-1.5 py-0.5 bg-muted rounded border text-[11px] font-mono">F12</kbd> to pay · <kbd className="px-1.5 py-0.5 bg-muted rounded border text-[11px] font-mono">F6</kbd> to hold
+              Press <kbd className="px-1.5 py-0.5 bg-muted rounded border text-[11px] font-mono">F2</kbd> search · <kbd className="px-1.5 py-0.5 bg-muted rounded border text-[11px] font-mono">F12</kbd> pay · <kbd className="px-1.5 py-0.5 bg-muted rounded border text-[11px] font-mono">F6</kbd> hold
             </p>
           </div>
         </div>

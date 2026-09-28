@@ -265,7 +265,11 @@ function BatchActions({ batch, packSize, onRefresh }: { batch: any; packSize: nu
                 })
                 if (confirmed) {
                   try {
-                    await window.api.invoke(IPC_CHANNELS.BATCHES_DELETE, batch.id)
+                    await window.api.invoke(IPC_CHANNELS.BATCHES_DELETE, {
+                      batchId: batch.id,
+                      actorUserId: user?.id,
+                      reason: `Manual batch deletion of ${batch.batch_number}`
+                    })
                     queryClient.invalidateQueries({ queryKey: ['productBatches'] })
                     queryClient.invalidateQueries({ queryKey: ['products'] })
                     onRefresh()
@@ -338,7 +342,7 @@ function ProductRow({ product, onEditProduct }: { product: Product; onEditProduc
         <td className="px-4 py-3">
           {product.shelf_rack || '-'}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold text-slate-800">
           {mrpDisplay}
         </td>
         <td className="px-4 py-3 text-right">
@@ -385,73 +389,79 @@ function ProductRow({ product, onEditProduct }: { product: Product; onEditProduc
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading batches...
               </div>
-            ) : batches && batches.length > 0 ? (
-              <div className="rounded-md border bg-card">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
-                    <tr>
-                      <th className="px-4 py-2 font-medium">Batch No</th>
-                      <th className="px-4 py-2 font-medium">Expiry</th>
-                      <th className="px-4 py-2 font-medium">Vendor</th>
-                      <th className="px-4 py-2 font-medium text-right">MRP</th>
-                      <th className="px-4 py-2 font-medium text-right">P.Rate</th>
-                      <th className="px-4 py-2 font-medium text-right">Stock</th>
-                      <th className="px-4 py-2 font-medium text-right text-muted-foreground font-normal">GST</th>
-                      <th className="px-4 py-2 font-medium w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {batches.map((batch: any) => {
-                      const isInactive = batch.status !== 'ACTIVE'
+            ) : (() => {
+              const visibleBatches = batches?.filter((b: any) => b.status !== 'DISPOSED') || []
+              if (visibleBatches.length === 0) {
+                return (
+                  <div className="text-sm text-muted-foreground py-2 italic flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    No stock batches found for this product.
+                  </div>
+                )
+              }
+              return (
+                <div className="rounded-md border bg-card">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
+                      <tr>
+                        <th className="px-4 py-2 font-medium">Batch No</th>
+                        <th className="px-4 py-2 font-medium">Expiry</th>
+                        <th className="px-4 py-2 font-medium">Vendor</th>
+                        <th className="px-4 py-2 font-medium text-right">MRP</th>
+                        <th className="px-4 py-2 font-medium text-right">P.Rate</th>
+                        <th className="px-4 py-2 font-medium text-right">Stock</th>
+                        <th className="px-4 py-2 font-medium text-right text-muted-foreground font-normal">GST</th>
+                        <th className="px-4 py-2 font-medium w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {visibleBatches.map((batch: any) => {
+                        const isInactive = batch.status !== 'ACTIVE'
 
-                      const getExpiryInfo = (sortDateStr: string, isActive: boolean) => {
-                        if (!sortDateStr) return { class: 'text-muted-foreground' };
-                        if (!isActive) return { class: 'text-muted-foreground' };
-                        const daysLeft = Math.ceil((new Date(sortDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const getExpiryInfo = (sortDateStr: string, isActive: boolean) => {
+                          if (!sortDateStr) return { class: 'text-muted-foreground' };
+                          if (!isActive) return { class: 'text-muted-foreground' };
+                          const daysLeft = Math.ceil((new Date(sortDateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
-                        if (daysLeft <= 0) return { class: 'text-red-700 font-bold bg-red-100 px-1.5 py-0.5 rounded', icon: true };
-                        if (daysLeft <= 30) return { class: 'text-red-600 font-bold', icon: true };
-                        if (daysLeft <= 90) return { class: 'text-orange-500 font-semibold', icon: true };
-                        if (daysLeft <= 180) return { class: 'text-amber-500 font-medium', icon: false };
-                        return { class: 'text-emerald-600', icon: false };
-                      }
+                          if (daysLeft <= 0) return { class: 'text-red-700 font-bold bg-red-100 px-1.5 py-0.5 rounded', icon: true };
+                          if (daysLeft <= 30) return { class: 'text-red-600 font-bold', icon: true };
+                          if (daysLeft <= 90) return { class: 'text-orange-500 font-semibold', icon: true };
+                          if (daysLeft <= 180) return { class: 'text-amber-500 font-medium', icon: false };
+                          return { class: 'text-emerald-600', icon: false };
+                        }
 
-                      const expiryInfo = getExpiryInfo(batch.expiry_sort_date, !isInactive)
+                        const expiryInfo = getExpiryInfo(batch.expiry_sort_date, !isInactive)
 
-                      return (
-                        <tr key={batch.id} className={`hover:bg-muted/30 ${isInactive ? 'opacity-60' : ''}`}>
-                          <td className="px-4 py-2 font-medium">↳ {batch.batch_number}</td>
-                          <td className="px-4 py-2">
-                            <span className={`flex items-center gap-1.5 ${expiryInfo.class}`}>
-                              {batch.expiry_date_str || '-'}
-                              {expiryInfo.icon && <AlertCircle className="w-3.5 h-3.5" />}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground text-xs">{batch.vendor_name || '-'}</td>
-                          <td className="px-4 py-2 text-right">{formatPaise(batch.mrp_paise)}</td>
-                          <td className="px-4 py-2 text-right text-muted-foreground">{formatPaise(batch.purchase_rate_paise)}</td>
-                          <td className="px-4 py-2 text-right">
-                            <div>{formatStock(batch.quantity, product.pack_size)}</div>
-                            {product.pack_size > 1 && batch.quantity > 0 && (
-                              <div className="text-[10px] text-muted-foreground">({batch.quantity} units)</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-right text-muted-foreground/50 text-xs">{batch.gst_rate_pct}%</td>
-                          <td className="px-4 py-2 text-right">
-                            <BatchActions batch={batch} packSize={product.pack_size} onRefresh={refetch} />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground py-2 italic flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                No stock batches found for this product.
-              </div>
-            )}
+                        return (
+                          <tr key={batch.id} className={`hover:bg-muted/30 ${isInactive ? 'opacity-60' : ''}`}>
+                            <td className="px-4 py-2 font-medium">↳ {batch.batch_number}</td>
+                            <td className="px-4 py-2">
+                              <span className={`flex items-center gap-1.5 ${expiryInfo.class}`}>
+                                {batch.expiry_date_str || '-'}
+                                {expiryInfo.icon && <AlertCircle className="w-3.5 h-3.5" />}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-muted-foreground text-xs">{batch.vendor_name || '-'}</td>
+                            <td className="px-4 py-2 text-right font-mono tabular-nums font-medium text-slate-800">{formatPaise(batch.mrp_paise)}</td>
+                            <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-500">{formatPaise(batch.purchase_rate_paise)}</td>
+                            <td className="px-4 py-2 text-right font-mono tabular-nums">
+                              <div>{formatStock(batch.quantity, product.pack_size)}</div>
+                              {product.pack_size > 1 && batch.quantity > 0 && (
+                                <div className="text-[10px] text-muted-foreground font-mono">({batch.quantity} units)</div>
+                              )}
+                            </td>
+                            <td className="px-4 py-2 text-right font-mono tabular-nums text-slate-400 text-xs">{batch.gst_rate_pct}%</td>
+                            <td className="px-4 py-2 text-right">
+                              <BatchActions batch={batch} packSize={product.pack_size} onRefresh={refetch} />
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
           </td>
         </tr>
       )}
@@ -567,7 +577,7 @@ export function ProductList() {
           <Search className="w-5 h-5 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search by brand name, generic name, or barcode..."
+            placeholder="Search by brand name, generic name, composition..."
             className="flex-1 bg-transparent outline-none"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -615,7 +625,7 @@ export function ProductList() {
                 <th className="px-4 py-3 font-medium">Brand Name</th>
                 <th className="px-4 py-3 font-medium">Category</th>
                 <th className="px-4 py-3 font-medium">Rack</th>
-                <th className="px-4 py-3 font-medium">MRP</th>
+                <th className="px-4 py-3 font-medium text-right">MRP</th>
                 <th className="px-4 py-3 font-medium text-right">Total Stock</th>
               </tr>
             </thead>

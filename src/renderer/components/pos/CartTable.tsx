@@ -76,12 +76,12 @@ function TotalInputCell({ item, updateTotal }: TotalInputCellProps) {
   return (
     <div className="flex justify-end">
       <div className="relative w-28">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">₹</span>
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold font-mono">₹</span>
         <input
           type="number"
           min="0"
           step="0.01"
-          className="w-full pl-6 pr-2 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary font-bold text-base hide-arrows"
+          className="w-full pl-6 pr-2 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary font-bold text-base font-mono tabular-nums hide-arrows"
           value={isFocused ? inputValue : currentTotalStr}
           onFocus={() => {
             setIsFocused(true)
@@ -123,7 +123,7 @@ export function CartTable() {
     return (
       <div className="flex flex-col items-center justify-center flex-1 p-8 text-center border-2 border-dashed rounded-lg bg-card text-muted-foreground">
         <p>No items in cart</p>
-        <p className="text-xs mt-2">Scan a barcode or search for a product to begin billing.</p>
+        <p className="text-xs mt-2">Search for a product to begin billing.</p>
       </div>
     )
   }
@@ -205,7 +205,7 @@ export function CartTable() {
                   </div>
                 </td>
                 
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold text-slate-800">
                   {formatPaise(item.mrpPaise * item.packSize)}
                 </td>
                 
@@ -217,7 +217,7 @@ export function CartTable() {
                         min="0"
                         max="100"
                         step="0.1"
-                        className="w-full pl-2 pr-7 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary font-medium"
+                        className="w-full pl-2 pr-7 py-1 text-right border rounded-md outline-none focus:ring-1 focus:ring-primary font-medium font-mono tabular-nums"
                         value={item.mrpPaise > 0 ? ((item.discountPaise / item.mrpPaise) * 100).toFixed(1).replace(/\.0$/, '') : 0}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value) || 0

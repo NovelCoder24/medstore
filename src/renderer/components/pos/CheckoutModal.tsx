@@ -42,20 +42,30 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
 
     function handleKeyDown(e: KeyboardEvent) {
       const activeTag = document.activeElement?.tagName
-      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
+        if (e.key === 'Enter' && e.ctrlKey) {
+          e.preventDefault()
+          handleCheckout(e as any)
+        }
+        return
+      }
 
-      if (e.key === '1') {
+      const k = e.key.toLowerCase()
+      if (k === '1' || k === 'c') {
         e.preventDefault()
         setPaymentMode('CASH')
-      } else if (e.key === '2') {
+      } else if (k === '2' || k === 'u') {
         e.preventDefault()
         setPaymentMode('UPI')
-      } else if (e.key === '3') {
+      } else if (k === '3' || k === 'k') {
         e.preventDefault()
         setPaymentMode('CARD')
-      } else if (e.key === '4') {
+      } else if (k === '4' || k === 'd') {
         e.preventDefault()
         setPaymentMode('CREDIT')
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        handleCheckout(e as any)
       }
     }
 
@@ -357,14 +367,14 @@ export function CheckoutModal({ isOpen, onOpenChange }: CheckoutModalProps) {
                 <div className="space-y-1.5 pt-2">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-medium">Payment Mode</label>
-                    <span className="text-[11px] text-muted-foreground">Hotkeys: 1 - 4</span>
+                    <span className="text-[11px] text-muted-foreground font-mono">Hotkeys: [1/C] [2/U] [3/K] [4/D]</span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[
-                      { key: 'CASH', num: '1', label: 'Cash' },
-                      { key: 'UPI', num: '2', label: 'UPI' },
-                      { key: 'CARD', num: '3', label: 'Card' },
-                      { key: 'CREDIT', num: '4', label: 'Khata' }
+                      { key: 'CASH', num: '1/C', label: 'Cash' },
+                      { key: 'UPI', num: '2/U', label: 'UPI / QR' },
+                      { key: 'CARD', num: '3/K', label: 'Card' },
+                      { key: 'CREDIT', num: '4/D', label: 'Khata' }
                     ].map(({ key, num, label }) => (
                       <button
                         key={key}

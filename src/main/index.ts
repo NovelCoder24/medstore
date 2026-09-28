@@ -20,6 +20,15 @@ import { registerCustomerHandlers } from './services/customer.service'
 import { registerReportsHandlers } from './services/reports.service'
 import { initAutoUpdater } from './services/updater.service'
 
+// Global process-level safety: prevent unhandled exceptions/rejections from crashing Electron
+process.on('uncaughtException', (error) => {
+  console.error('[Main Process Uncaught Exception]', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main Process Unhandled Rejection]', reason)
+})
+
 function createWindow(): void {
   console.log("=== MedStore Documents Path: ===", app.getPath('documents'))
   // Create the browser window.
@@ -37,7 +46,23 @@ function createWindow(): void {
       devTools: is.dev
     }
   }) 
-  // mainWindow.webContents.openDevTools()
+
+  // Renderer crash recovery: reload cleanly instead of remaining on a dead/blank screen
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[Renderer Process Gone]', details.reason, 'exitCode:', details.exitCode)
+    if (details.reason !== 'clean-exit') {
+      console.log('[Crash Recovery] Attempting to reload renderer in 1 second...')
+      setTimeout(() => {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.reload()
+        }
+      }, 1000)
+    }
+  })
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('[Window Unresponsive] Window is temporarily unresponsive.')
+  })
 
   // Initialize auto updater
   initAutoUpdater(mainWindow)

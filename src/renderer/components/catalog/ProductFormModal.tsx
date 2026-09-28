@@ -19,7 +19,6 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
     manufacturer: product?.manufacturer || '',
     category: product?.category || 'GENERIC',
     pack_size: String(product?.pack_size || 1),
-    barcode: product?.barcode || '',
     hsn_code: product?.hsn_code || '',
     gst_rate_pct: String(product?.gst_rate_pct ?? 12),
     schedule_flag: product?.schedule_flag || 'NONE',
@@ -41,7 +40,6 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
         manufacturer: product?.manufacturer || '',
         category: product?.category || 'GENERIC',
         pack_size: String(product?.pack_size || 1),
-        barcode: product?.barcode || '',
         hsn_code: product?.hsn_code || '',
         gst_rate_pct: String(product?.gst_rate_pct ?? 12),
         schedule_flag: product?.schedule_flag || 'NONE',
@@ -111,7 +109,6 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
         // Convert empty strings to null for backend
         generic_name: formData.generic_name.trim() || null,
         manufacturer: formData.manufacturer.trim() || null,
-        barcode: formData.barcode.trim() || null,
         hsn_code: formData.hsn_code.trim() || null,
         shelf_rack: formData.shelf_rack.trim() || null,
         initial_batch
@@ -265,18 +262,6 @@ export function ProductFormModal({ isOpen, onClose, product }: ProductFormModalP
                   onChange={handleChange}
                   placeholder="e.g. A3"
                   className="w-full px-3 py-2 text-sm border rounded-md outline-none focus:ring-2 focus:ring-primary bg-background uppercase"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Barcode / EAN</label>
-                <input 
-                  type="text" 
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleChange}
-                  placeholder="Scan or enter barcode"
-                  className="w-full px-3 py-2 text-sm border rounded-md outline-none focus:ring-2 focus:ring-primary bg-background"
                 />
               </div>
 

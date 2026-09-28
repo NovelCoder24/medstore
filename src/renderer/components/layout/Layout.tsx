@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { useAuthStore } from '../../store/auth.store'
 import { 
   LayoutDashboard, CreditCard, PackageSearch, Users, 
-  ShoppingCart, Truck, History, Pill, BadgeCheck, FileText, Settings
+  ShoppingCart, Truck, History, Pill, BadgeCheck, FileText, Settings,
+  ChevronLeft, ChevronRight, Keyboard
 } from 'lucide-react'
 import { ErrorBoundary } from './ErrorBoundary'
 import { UpdateNotification } from './UpdateNotification'
@@ -49,6 +50,10 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
     })
   }
 
+  const triggerShortcutsModal = () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))
+  }
+
   const allowedNavItems = mainNavItems.filter(
     (item) => item.role === 'CASHIER' || isOwner()
   )
@@ -60,9 +65,9 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
         isCollapsed ? 'w-16' : 'w-64'
       } bg-slate-900 text-slate-300 flex flex-col justify-between transition-all duration-300 z-30 flex-shrink-0 select-none border-r border-slate-800`}>
         <div>
-          {/* Brand Header: Logo button toggles expand/collapse */}
+          {/* Brand Header: Logo + Toggle button */}
           <div className={`h-16 flex items-center ${
-            isCollapsed ? 'justify-center px-2' : 'px-5'
+            isCollapsed ? 'justify-center px-2' : 'justify-between px-4'
           } bg-slate-950 border-b border-slate-800`}>
             <div className="flex items-center space-x-3 overflow-hidden">
               <button
@@ -80,6 +85,17 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
                 </div>
               )}
             </div>
+
+            {!isCollapsed && (
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                title="Collapse sidebar"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Navigation Links */}
@@ -128,9 +144,29 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
           </nav>
         </div>
 
-        {/* Bottom Section: Settings */}
-        {isOwner() && (
-          <div className="p-2 border-t border-slate-800">
+        {/* Bottom Section: Shortcuts & Settings */}
+        <div className="p-2 border-t border-slate-800 space-y-1">
+          <button
+            onClick={triggerShortcutsModal}
+            title={isCollapsed ? 'Shortcuts (?)' : undefined}
+            className={`w-full flex items-center ${
+              isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'
+            } rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition duration-150 group cursor-pointer`}
+          >
+            <div className="flex items-center">
+              <Keyboard className={`w-4 h-4 transition shrink-0 ${
+                isCollapsed ? '' : 'mr-3'
+              } text-slate-400 group-hover:text-blue-400`} />
+              {!isCollapsed && <span>Shortcuts</span>}
+            </div>
+            {!isCollapsed && (
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-slate-800/80 rounded border border-slate-700">
+                ?
+              </kbd>
+            )}
+          </button>
+
+          {isOwner() && (
             <button
               onClick={() => onTabChange('Settings')}
               title={isCollapsed ? 'Settings' : undefined}
@@ -147,8 +183,8 @@ export function Layout({ children, activeTab, onTabChange }: LayoutProps) {
               } ${activeTab === 'Settings' ? 'text-white' : 'text-slate-400 group-hover:text-blue-400'}`} />
               {!isCollapsed && <span>Settings</span>}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
       {/* Main Content Area */}

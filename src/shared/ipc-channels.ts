@@ -33,6 +33,7 @@ export const IPC_CHANNELS = {
   PRODUCTS_UPDATE: 'products:update',
   PRODUCTS_DELETE: 'products:delete',
   PRODUCTS_LIST: 'products:list',
+  PRODUCTS_GET_SUBSTITUTES: 'products:get-substitutes',
 
   // ── Compositions (Phase 1) ──
   COMPOSITIONS_LIST: 'compositions:list',

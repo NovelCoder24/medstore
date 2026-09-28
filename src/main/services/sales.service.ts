@@ -269,14 +269,13 @@ export function getAllBatchesForProduct(productId: number): any[] {
       b.created_at
     FROM batches b
     LEFT JOIN vendors v ON b.vendor_id = v.id
-    WHERE b.product_id = ?
+    WHERE b.product_id = ? AND b.status != 'DISPOSED'
     ORDER BY 
       CASE b.status 
         WHEN 'ACTIVE' THEN 0 
         WHEN 'QUARANTINED' THEN 1 
         WHEN 'EXPIRED' THEN 2 
         WHEN 'RETURNED' THEN 3 
-        WHEN 'DISPOSED' THEN 4 
       END,
       b.expiry_date ASC
   `).all(productId)

@@ -6,14 +6,21 @@ function ToastRow({ item }: { item: ToastItem }) {
   const removeToast = useToastStore((s) => s.removeToast)
   const [copied, setCopied] = React.useState(false)
 
+  const safeTitle = typeof item.title === 'string' ? item.title : String(item.title || 'Notification')
+  const safeDescription = typeof item.description === 'string'
+    ? item.description
+    : (typeof item.description === 'object' && item.description !== null
+        ? ((item.description as any).description || JSON.stringify(item.description))
+        : (item.description ? String(item.description) : null))
+
   const handleCopy = async () => {
     try {
-      const fullText = item.description ? `${item.title}\n${item.description}` : item.title
+      const fullText = safeDescription ? `${safeTitle}\n${safeDescription}` : safeTitle
       await navigator.clipboard.writeText(fullText)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // ignore
+      // ignore clipboard permission errors
     }
   }
 
@@ -34,7 +41,10 @@ function ToastRow({ item }: { item: ToastItem }) {
       bg: 'bg-white border-slate-300 text-slate-950',
       icon: <Info className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />
     }
-  }[item.type]
+  }[item.type] || {
+    bg: 'bg-white border-slate-300 text-slate-950',
+    icon: <Info className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />
+  }
 
   return (
     <div
@@ -44,9 +54,9 @@ function ToastRow({ item }: { item: ToastItem }) {
       <div className="flex items-start gap-3 min-w-0">
         {typeConfig.icon}
         <div className="min-w-0">
-          <p className="text-xs sm:text-sm font-bold leading-tight break-words">{item.title}</p>
-          {item.description && (
-            <p className="text-xs text-slate-600 mt-1 leading-relaxed break-words">{item.description}</p>
+          <p className="text-xs sm:text-sm font-bold leading-tight break-words">{safeTitle}</p>
+          {safeDescription && (
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed break-words">{safeDescription}</p>
           )}
         </div>
       </div>
@@ -79,13 +89,18 @@ function ToastRow({ item }: { item: ToastItem }) {
 export function ToastContainer() {
   const toasts = useToastStore((s) => s.toasts)
 
-  if (toasts.length === 0) return null
+  if (!toasts || toasts.length === 0) return null
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2.5 max-w-full pointer-events-auto">
-      {toasts.map((toast) => (
-        <ToastRow key={toast.id} item={toast} />
-      ))}
+      {toasts.map((item) => {
+        try {
+          return <ToastRow key={item.id} item={item} />
+        } catch (e) {
+          console.error('[ToastContainer] Failed to render toast item:', e)
+          return null
+        }
+      })}
     </div>
   )
 }

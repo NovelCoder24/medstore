@@ -19,6 +19,8 @@ import { StaffList } from './components/staff/StaffList'
 import { AuditLogs } from './components/settings/AuditLogs'
 import { ToastContainer } from './components/common/ToastContainer'
 import { ConfirmModal } from './components/common/ConfirmModal'
+import { ShortcutCheatsheetModal } from './components/common/ShortcutCheatsheetModal'
+import { ErrorBoundary } from './components/layout/ErrorBoundary'
 
 export function App() {
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null)
@@ -47,30 +49,53 @@ export function App() {
   }
 
   if (isFirstRun) {
-    return <FirstRunSetup onComplete={checkFirstRun} />
+    return (
+      <ErrorBoundary fallbackTitle="First Run Setup Error">
+        <FirstRunSetup onComplete={checkFirstRun} />
+      </ErrorBoundary>
+    )
   }
 
   if (!user) {
-    return <PinPad />
+    return (
+      <ErrorBoundary fallbackTitle="Authentication Screen Error">
+        <PinPad />
+      </ErrorBoundary>
+    )
   }
 
   return (
     <>
-      <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-        {activeTab === 'POS Billing' && <PosBilling />}
-        {activeTab === 'Inventory' && <ProductList />}
-        {activeTab === 'Purchases' && <PurchaseForm />}
-        {activeTab === 'Suppliers' && <VendorList />}
-        {activeTab === 'Customers' && <CustomerList />}
-        {activeTab === 'Sales History' && <SalesHistory />}
-        {activeTab === 'Drug Register' && <ScheduleRegister />}
-        {activeTab === 'Dashboard' && <Dashboard onNavigate={setActiveTab} />}
-        {activeTab === 'Staff' && <StaffList />}
-        {activeTab === 'Audit Trail' && <AuditLogs />}
-        {activeTab === 'Settings' && <SettingsForm />}
-      </Layout>
-      <ToastContainer />
-      <ConfirmModal />
+      <ErrorBoundary
+        fallbackTitle="Application Navigation Recovery"
+        onReset={() => setActiveTab('Dashboard')}
+      >
+        <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+          {activeTab === 'POS Billing' && <PosBilling />}
+          {activeTab === 'Inventory' && <ProductList />}
+          {activeTab === 'Purchases' && <PurchaseForm />}
+          {activeTab === 'Suppliers' && <VendorList />}
+          {activeTab === 'Customers' && <CustomerList />}
+          {activeTab === 'Sales History' && <SalesHistory />}
+          {activeTab === 'Drug Register' && <ScheduleRegister />}
+          {activeTab === 'Dashboard' && <Dashboard onNavigate={setActiveTab} />}
+          {activeTab === 'Staff' && <StaffList />}
+          {activeTab === 'Audit Trail' && <AuditLogs />}
+          {activeTab === 'Settings' && <SettingsForm />}
+        </Layout>
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <ToastContainer />
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <ConfirmModal />
+      </ErrorBoundary>
+
+      <ErrorBoundary>
+        <ShortcutCheatsheetModal />
+      </ErrorBoundary>
     </>
   )
 }

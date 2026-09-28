@@ -169,8 +169,8 @@ function InstalmentPaymentModal({ vendor, onClose }: PaymentModalProps) {
                   type="button"
                   onClick={() => setPaymentMode(mode)}
                   className={`py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center ${paymentMode === mode
-                      ? 'bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/30'
-                      : 'bg-muted hover:bg-muted/80 text-foreground font-semibold border-border'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/30'
+                    : 'bg-muted hover:bg-muted/80 text-foreground font-semibold border-border'
                     }`}
                 >
                   {mode.replace('_', ' ')}
@@ -282,8 +282,8 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
           <button
             onClick={() => setActiveTab('PAYMENTS')}
             className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${activeTab === 'PAYMENTS'
-                ? 'border-primary text-primary font-extrabold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+              ? 'border-primary text-primary font-extrabold'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
           >
             Instalment Payments ({payments?.length || 0})
@@ -291,8 +291,8 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
           <button
             onClick={() => setActiveTab('LEDGER')}
             className={`py-3.5 px-4 text-xs font-bold border-b-2 transition-all ${activeTab === 'LEDGER'
-                ? 'border-primary text-primary font-extrabold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+              ? 'border-primary text-primary font-extrabold'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
           >
             Account Ledger History ({ledger?.length || 0})
@@ -383,8 +383,8 @@ function VendorLedgerModal({ vendor, onClose }: LedgerModalProps) {
                             </td>
                             <td className="px-4 py-3">
                               <span className={`font-bold px-2.5 py-0.5 rounded-md text-[10px] border ${entry.transaction_type === 'PURCHASE_INVOICE'
-                                  ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
-                                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                                : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                                 }`}>
                                 {entry.transaction_type.replace('_', ' ')}
                               </span>

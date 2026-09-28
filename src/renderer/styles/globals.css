@@ -25,6 +25,20 @@
     --muted: #f1f5f9;
     --muted-foreground: #64748b;
     --radius: 0.75rem;
+
+    /* High-contrast Clinical & Pharmacy Tokens */
+    --clinical-emerald: #059669;
+    --clinical-emerald-bg: #ecfdf5;
+    --clinical-emerald-border: #a7f3d0;
+    --clinical-amber: #d97706;
+    --clinical-amber-bg: #fffbeb;
+    --clinical-amber-border: #fde68a;
+    --clinical-crimson: #dc2626;
+    --clinical-crimson-bg: #fef2f2;
+    --clinical-crimson-border: #fecaca;
+    --clinical-h1: #7c3aed;
+    --clinical-h1-bg: #f5f3ff;
+    --clinical-h1-border: #ddd6fe;
   }
 }
 
@@ -38,6 +52,36 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
+}
+
+/* Numeric & Financial Accounting Tabular Figures */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Clinical Semantic Badges */
+.badge-clinical-active {
+  background-color: var(--clinical-emerald-bg);
+  color: var(--clinical-emerald);
+  border: 1px solid var(--clinical-emerald-border);
+}
+
+.badge-clinical-amber {
+  background-color: var(--clinical-amber-bg);
+  color: var(--clinical-amber);
+  border: 1px solid var(--clinical-amber-border);
+}
+
+.badge-clinical-danger {
+  background-color: var(--clinical-crimson-bg);
+  color: var(--clinical-crimson);
+  border: 1px solid var(--clinical-crimson-border);
+}
+
+.badge-clinical-h1 {
+  background-color: var(--clinical-h1-bg);
+  color: var(--clinical-h1);
+  border: 1px solid var(--clinical-h1-border);
 }
 
 /* Custom Sleek Scrollbar */
@@ -57,4 +101,41 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* AI Scanning & Extraction Motion Keyframes */
+@keyframes shimmer-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+@keyframes laser-glow {
+  0%, 100% { opacity: 0.6; filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.4)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.8)); }
+}
+
+.animate-shimmer-slide {
+  animation: shimmer-slide 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.2s ease-in-out infinite;
+}
+
+.animate-laser-glow {
+  animation: laser-glow 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer-slide,
+  .animate-pulse-ring,
+  .animate-laser-glow {
+    animation: none !important;
+  }
 }

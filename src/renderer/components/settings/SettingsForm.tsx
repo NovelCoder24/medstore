@@ -10,7 +10,7 @@ export function SettingsForm() {
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [hasExistingKey, setHasExistingKey] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('gemini-3.7-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash')
   const [error, setError] = useState<string | null>(null)
   
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7)) // YYYY-MM
@@ -114,15 +114,16 @@ export function SettingsForm() {
                     disabled={isSaving}
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 font-medium"
                   >
-                    <option value="gemini-3.7-flash">gemini-3.7-flash (Default - Fast & High Accuracy)</option>
-                    <option value="gemini-3.6-flash">gemini-3.6-flash (Fast & High Efficiency)</option>
-                    <option value="gemini-3.5-flash">gemini-3.5-flash (Balanced)</option>
+                    <option value="gemini-3.8-flash">gemini-3.8-flash (Primary - Default & Fastest)</option>
+                    <option value="gemini-3.7-flash">gemini-3.7-flash (Optional - High Accuracy)</option>
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (1st Fallback - High Efficiency)</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash (2nd Fallback - Stable)</option>
                   </select>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-400">
-                Note: In case of network rate limits or heavy cloud traffic, the system automatically falls back to <strong>gemini-3.5-flash</strong> to avoid interrupting your workflow.
+                Note: Automatic fallback is active. If your preferred model experiences capacity limits, the system retries with backoff, then safely cascades to <strong>gemini-3.6-flash</strong> (1st fallback) and <strong>gemini-3.5-flash</strong> (2nd fallback).
               </p>
 
               <div className="flex items-center gap-3 pt-2">
